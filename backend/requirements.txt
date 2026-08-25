@@ -1,0 +1,15 @@
+# Week 1 backend dependencies (scaffold only)
+
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+alembic
+pgvector
+pydantic
+pydantic-settings
+pytest
+httpx
+opencv-python
+onnxruntime
+mediapipe

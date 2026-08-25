@@ -1,0 +1,5 @@
+# Root compose entry for local development.
+# Delegates to infrastructure/docker/docker-compose.dev.yml
+
+include:
+  - path: infrastructure/docker/docker-compose.dev.yml
