@@ -53,3 +53,9 @@ coverage/
 
 # Alembic / local artifacts
 *.db
+
+# Local ML model weights (download at setup; do not commit binaries)
+backend/models/*.onnx
+backend/models/*.tflite
+backend/models/*.task
+backend/models/*.download

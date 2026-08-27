@@ -15,7 +15,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@face-auth/sdk": ["../sdk/src/index.ts"],
+      "@face-auth/sdk/*": ["../sdk/src/*"]
+    }
   },
   "include": ["src"]
 }

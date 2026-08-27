@@ -7,6 +7,11 @@ import {
 } from "react";
 
 import {
+  createBurstCapture,
+  POST_BLINK_CAPTURE,
+  type CapturedFrame,
+} from "../camera/BurstCapture";
+import {
   createCameraManager,
   type CameraManager,
 } from "../camera/CameraManager";
@@ -17,34 +22,41 @@ import type {
   CameraStartOptions,
   CameraStatus,
 } from "../camera/camera.types";
+import {
+  createBlinkDetector,
+  createMediaPipeFaceDetectorSource,
+  createMediaPipeFaceLandmarkerSource,
+  KIOSK_LIGHT_BLINK,
+  type BlinkDetector,
+  type FaceLandmarkSource,
+  type FacePresenceSource,
+} from "../liveness/BlinkDetector";
+import type {
+  CapturePhase,
+  FaceCaptureFailure,
+  FaceCaptureResult,
+} from "../types/auth.types";
+import { CaptureStatus } from "./CaptureStatus";
 
 export interface CameraOverlayProps {
-  /**
-   * When true, overlay is shown and camera start is attempted.
-   * FaceAuthSDK / Mendix should toggle this for the auth session only.
-   */
   open: boolean;
-
-  /** Optional shared manager; if omitted, overlay owns a private instance. */
   cameraManager?: CameraManagerApi;
-
-  /**
-   * Optional start preferences. Omit for default behavior: any available
-   * video device (`video: true`, `audio: false`). Do not require a fixed deviceId.
-   */
   startOptions?: CameraStartOptions;
-
-  /** Called after camera has been stopped/cleaned and overlay should dismiss. */
   onClose?: () => void;
-
-  /** Notifies host of lifecycle/error changes without exposing MediaStream details. */
   onSnapshotChange?: (snapshot: CameraSessionSnapshot) => void;
-
-  /** Optional instruction line under the preview (liveness copy comes later). */
-  instruction?: string;
-
-  /** Accessible title for the dialog-like overlay. */
+  /**
+   * When true, runs: face present → blink → burst → onCaptureComplete → close.
+   * Mendix production path uses FaceAuthSDK.captureFace() which enables this.
+   */
+  enableCapturePipeline?: boolean;
+  onCaptureComplete?: (result: FaceCaptureResult) => void;
+  onCaptureError?: (failure: FaceCaptureFailure) => void;
+  onPhaseChange?: (phase: CapturePhase) => void;
   title?: string;
+  /** Max ms to wait for a face before failing. */
+  faceTimeoutMs?: number;
+  /** Max ms for blink after face is found. */
+  blinkTimeoutMs?: number;
 }
 
 interface OverlayViewState {
@@ -60,15 +72,8 @@ const INITIAL_VIEW: OverlayViewState = {
 };
 
 /**
- * SDK-owned fullscreen camera UI.
- *
- * Mendix / test-harness do not implement their own camera page.
- * They open this overlay; the overlay owns preview binding and cleanup.
- *
- * Non-goals for this phase:
- * - Blink / liveness prompts beyond a static instruction
- * - Frame burst capture
- * - Calling the authentication API
+ * SDK-owned camera UI for Mendix / test-harness.
+ * Host apps never implement camera pages — they call FaceAuthSDK only.
  */
 export function CameraOverlay({
   open,
@@ -76,18 +81,35 @@ export function CameraOverlay({
   startOptions,
   onClose,
   onSnapshotChange,
-  instruction = "Look at the camera",
+  enableCapturePipeline = false,
+  onCaptureComplete,
+  onCaptureError,
+  onPhaseChange,
   title = "Face authentication",
+  faceTimeoutMs = 10_000,
+  blinkTimeoutMs = 10_000,
 }: CameraOverlayProps): ReactElement | null {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const ownedManagerRef = useRef<CameraManager | null>(null);
   const managerRef = useRef<CameraManagerApi | null>(null);
   const startOptionsRef = useRef(startOptions);
   const onSnapshotChangeRef = useRef(onSnapshotChange);
+  const onCaptureCompleteRef = useRef(onCaptureComplete);
+  const onCaptureErrorRef = useRef(onCaptureError);
+  const onPhaseChangeRef = useRef(onPhaseChange);
+  const onCloseRef = useRef(onClose);
+
   const [view, setView] = useState<OverlayViewState>(INITIAL_VIEW);
+  const [phase, setPhase] = useState<CapturePhase>("idle");
+  const [phaseMessage, setPhaseMessage] = useState<string | undefined>();
+  const phaseRef = useRef<CapturePhase>("idle");
 
   startOptionsRef.current = startOptions;
   onSnapshotChangeRef.current = onSnapshotChange;
+  onCaptureCompleteRef.current = onCaptureComplete;
+  onCaptureErrorRef.current = onCaptureError;
+  onPhaseChangeRef.current = onPhaseChange;
+  onCloseRef.current = onClose;
 
   if (!managerRef.current) {
     if (cameraManager) {
@@ -100,7 +122,18 @@ export function CameraOverlay({
 
   const manager = managerRef.current;
 
-  // Subscribe + mirror snapshot to React state / host callbacks.
+  const updatePhase = (next: CapturePhase, message?: string) => {
+    if (phaseRef.current === next && message === undefined) {
+      return;
+    }
+    phaseRef.current = next;
+    setPhase(next);
+    if (message !== undefined) {
+      setPhaseMessage(message);
+    }
+    onPhaseChangeRef.current?.(next);
+  };
+
   useEffect(() => {
     if (!open) {
       return;
@@ -119,27 +152,33 @@ export function CameraOverlay({
     };
 
     applySnapshot(manager.snapshot);
-
-    const unsubscribe = manager.subscribe((event) => {
-      applySnapshot(event.snapshot);
-    });
-
-    return unsubscribe;
+    return manager.subscribe((event) => applySnapshot(event.snapshot));
   }, [open, manager]);
 
-  // Start camera when opened; always cleanup when closed or unmounted.
   useEffect(() => {
     if (!open) {
       return;
     }
 
     let cancelled = false;
+    updatePhase("starting_camera");
 
     const run = async () => {
       try {
         await manager.start(startOptionsRef.current);
       } catch {
-        // Typed error is already on manager.snapshot / events.
+        if (!cancelled && enableCapturePipeline) {
+          const message =
+            manager.snapshot.error?.message ?? "Camera failed to start.";
+          updatePhase("error", message);
+          onCaptureErrorRef.current?.({
+            code: "CAMERA_FAILED",
+            message,
+            phase: "error",
+          });
+          await manager.cleanup();
+          onCloseRef.current?.();
+        }
       }
       if (cancelled) {
         await manager.cleanup();
@@ -152,9 +191,10 @@ export function CameraOverlay({
       cancelled = true;
       void manager.cleanup();
     };
+    // enableCapturePipeline intentionally read for error path only at start
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, manager]);
 
-  // Bind MediaStream to the <video> element whenever it becomes available.
   useEffect(() => {
     if (!open) {
       return;
@@ -170,15 +210,11 @@ export function CameraOverlay({
         video.srcObject = stream;
       }
       if (stream) {
-        void video.play().catch(() => {
-          // Autoplay can fail briefly during permission transitions; preview
-          // still binds when the track becomes live.
-        });
+        void video.play().catch(() => undefined);
       }
     };
 
     bind(manager.snapshot.stream);
-
     const unsubscribe = manager.subscribe((event) => {
       bind(event.snapshot.stream);
     });
@@ -189,7 +225,240 @@ export function CameraOverlay({
     };
   }, [open, manager]);
 
-  // Drop privately owned manager only when this overlay instance unmounts.
+  // Capture pipeline: fast face detect → blink → burst → complete → close
+  useEffect(() => {
+    if (!open || !enableCapturePipeline) {
+      return;
+    }
+
+    let cancelled = false;
+    let rafId = 0;
+    let presence: FacePresenceSource | null = null;
+    let landmarker: FaceLandmarkSource | null = null;
+    let blink: BlinkDetector | null = null;
+    let faceSeen = false;
+    let blinkStarted = false;
+    let finishing = false;
+    let modelsReady: Promise<void> | null = null;
+    const startedAt = Date.now();
+
+    const fail = (failure: FaceCaptureFailure) => {
+      if (cancelled || finishing) {
+        return;
+      }
+      finishing = true;
+      updatePhase("error", failure.message);
+      onCaptureErrorRef.current?.(failure);
+      void manager.cleanup().finally(() => onCloseRef.current?.());
+    };
+
+    const succeed = (frame: CapturedFrame, framesConsidered: number) => {
+      if (cancelled || finishing) {
+        return;
+      }
+      finishing = true;
+      const result: FaceCaptureResult = {
+        blob: frame.blob,
+        dataUrl: frame.dataUrl,
+        width: frame.width,
+        height: frame.height,
+        mimeType: "image/jpeg",
+        capturedAt: frame.capturedAt,
+        framesConsidered,
+      };
+      updatePhase("completed", "Capture complete");
+      onCaptureCompleteRef.current?.(result);
+      void manager.cleanup().finally(() => onCloseRef.current?.());
+    };
+
+    // Preload BlazeFace + mesh while camera starts (biggest latency win).
+    modelsReady = (async () => {
+      const [presenceSource, meshSource] = await Promise.all([
+        createMediaPipeFaceDetectorSource({
+          minDetectionConfidence: 0.35,
+        }),
+        createMediaPipeFaceLandmarkerSource({
+          minFaceDetectionConfidence: 0.35,
+          minFacePresenceConfidence: 0.35,
+        }),
+      ]);
+      if (cancelled) {
+        presenceSource.close();
+        meshSource.close();
+        return;
+      }
+      presence = presenceSource;
+      landmarker = meshSource;
+      blink = createBlinkDetector({
+        ...KIOSK_LIGHT_BLINK,
+        timeoutMs: blinkTimeoutMs,
+      });
+    })().catch((error: unknown) => {
+      if (!cancelled) {
+        fail({
+          code: "BLINK_FAILED",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to start face detection models.",
+          phase: "error",
+        });
+      }
+    });
+
+    const tick = async () => {
+      if (cancelled || finishing) {
+        return;
+      }
+
+      const video = videoRef.current;
+      if (
+        !video ||
+        manager.snapshot.status !== "active" ||
+        video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+      ) {
+        rafId = window.requestAnimationFrame(() => {
+          void tick();
+        });
+        return;
+      }
+
+      if (modelsReady) {
+        await modelsReady;
+        modelsReady = null;
+      }
+      if (cancelled || finishing || !presence || !landmarker || !blink) {
+        return;
+      }
+
+      if (!faceSeen && Date.now() - startedAt > faceTimeoutMs) {
+        fail({
+          code: "FACE_TIMEOUT",
+          message: "No face detected in time. Please look at the camera.",
+          phase: "error",
+        });
+        return;
+      }
+
+      try {
+        // Fast path: BlazeFace presence only until a face is locked.
+        if (!faceSeen) {
+          if (phaseRef.current !== "searching_face") {
+            updatePhase("searching_face", "Look at the camera");
+          }
+          const faceCount = await presence.countFaces(video);
+          if (cancelled || finishing) {
+            return;
+          }
+          if (faceCount === 1) {
+            faceSeen = true;
+            // Minimal liveness: one blink only — skip dwelling on face_detected.
+            blinkStarted = true;
+            blink.start({ reset: true });
+            updatePhase("blink_prompt", "Blink once");
+          } else if (faceCount > 1) {
+            updatePhase("searching_face", "Only one face should be in frame");
+          }
+        } else {
+          // Mesh + EAR only after face is present (single blink).
+          const faces = await landmarker.detect(video);
+          if (cancelled || finishing) {
+            return;
+          }
+
+          if (faces.length === 0) {
+            if (phaseRef.current !== "searching_face") {
+              updatePhase("searching_face", "Keep your face in view");
+            }
+            rafId = window.requestAnimationFrame(() => {
+              void tick();
+            });
+            return;
+          }
+
+          if (faces.length > 1) {
+            updatePhase("searching_face", "Only one face should be in frame");
+            rafId = window.requestAnimationFrame(() => {
+              void tick();
+            });
+            return;
+          }
+
+          if (!blinkStarted) {
+            blinkStarted = true;
+            blink.start({ reset: true });
+            updatePhase("blink_prompt", "Blink once");
+          }
+
+          const sample = blink.processLandmarks(faces);
+
+          if (sample.phase === "timed_out") {
+            fail({
+              code: "BLINK_TIMEOUT",
+              message: "Blink not detected in time. Please try again.",
+              phase: "error",
+            });
+            return;
+          }
+
+          if (sample.phase === "blink_confirmed") {
+            // Light blink gate only — quality comes from best-frame pick for embedding.
+            updatePhase("capturing", "Selecting best frame…");
+            try {
+              const burst = createBurstCapture();
+              const { bestFrame, framesConsidered } = await burst.capture(
+                video,
+                POST_BLINK_CAPTURE,
+              );
+              succeed(bestFrame, framesConsidered);
+            } catch (error) {
+              fail({
+                code: "CAPTURE_FAILED",
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Failed to capture face frame.",
+                phase: "error",
+              });
+            }
+            return;
+          }
+        }
+      } catch (error) {
+        fail({
+          code: "UNKNOWN",
+          message:
+            error instanceof Error ? error.message : "Capture pipeline failed.",
+          phase: "error",
+        });
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        void tick();
+      });
+    };
+
+    updatePhase("searching_face", "Look at the camera");
+    rafId = window.requestAnimationFrame(() => {
+      void tick();
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(rafId);
+      blink?.stop();
+      void presence?.close();
+      void landmarker?.close();
+    };
+  }, [
+    open,
+    enableCapturePipeline,
+    manager,
+    faceTimeoutMs,
+    blinkTimeoutMs,
+  ]);
+
   useEffect(() => {
     return () => {
       const owned = ownedManagerRef.current;
@@ -206,12 +475,20 @@ export function CameraOverlay({
   }
 
   const statusLabel = resolveStatusLabel(view.status, view.error);
-  const canClose = !view.isBusy || view.status === "error";
+  const showCameraBanner = view.status !== "active";
+  const canClose = !view.isBusy || view.status === "error" || phase === "error";
 
   const handleClose = () => {
+    if (enableCapturePipeline) {
+      onCaptureErrorRef.current?.({
+        code: "CANCELLED",
+        message: "Capture cancelled.",
+        phase: "cancelled",
+      });
+    }
     void (async () => {
       await manager.cleanup();
-      onClose?.();
+      onCloseRef.current?.();
     })();
   };
 
@@ -222,6 +499,7 @@ export function CameraOverlay({
       aria-modal="true"
       aria-label={title}
       data-camera-status={view.status}
+      data-capture-phase={phase}
     >
       <div style={styles.panel}>
         <header style={styles.header}>
@@ -247,14 +525,18 @@ export function CameraOverlay({
             aria-label="Live camera preview"
           />
 
-          {view.status !== "active" && (
+          {showCameraBanner && (
             <div style={styles.banner} data-testid="camera-status-banner">
               {statusLabel}
             </div>
           )}
         </div>
 
-        <p style={styles.instruction}>{instruction}</p>
+        {enableCapturePipeline ? (
+          <CaptureStatus phase={phase} message={phaseMessage} />
+        ) : (
+          <p style={styles.instruction}>Look at the camera</p>
+        )}
 
         {view.error && (
           <p style={styles.error} role="alert">

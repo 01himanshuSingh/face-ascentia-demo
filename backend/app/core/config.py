@@ -26,10 +26,9 @@ class Settings(BaseSettings):
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
 
-    # Provisional Week 1 value from schema docs — verify against real SFace output
-    # before treating this as production-final.
+    # Verified: OpenCV Zoo SFace 2021dec outputs 128-D (Apache-2.0).
     face_embedding_dimensions: int = 128
-
+    face_embedding_model_version: str = "sface_2021dec_opencv_zoo"
 
 @lru_cache
 def get_settings() -> Settings:
