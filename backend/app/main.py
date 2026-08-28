@@ -1,3 +1,58 @@
-from fastapi import FastAPI
+"""
+Face Authentication API — FastAPI application entry.
+
+HTTP edge wiring:
+  - CORS for Mendix / test-harness
+  - /authenticate router
+  - AuthError → AuthErrorResponse (single mapping point)
+"""
+
+from __future__ import annotations
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.routes.auth import router as auth_router
+from app.common.exceptions import AppError
+from app.core.config import settings
+from app.core.logging import setup_logging
+
+setup_logging()
 
 app = FastAPI(title="Face Authentication API")
+
+# --- CORS (Week 1: permissive; production sets explicit Mendix origins) ---
+_origins = [
+    origin.strip()
+    for origin in settings.cors_allow_origins.split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins if _origins != ["*"] else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Routes ---
+app.include_router(auth_router)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe for Docker / plant ops."""
+    return {"status": "ok"}
+
+
+@app.exception_handler(AppError)
+async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+    """
+    Map domain errors raised in services/repositories to stable JSON for the SDK.
+    """
+    body = exc.to_error_response()
+    return JSONResponse(
+        status_code=exc.http_status,
+        content=body.model_dump(by_alias=True),
+    )

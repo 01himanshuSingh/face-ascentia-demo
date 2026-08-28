@@ -1,12 +1,18 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import {
+  createFaceAuthClient,
+  FaceAuthApiError,
+  type FaceAuthClient,
+} from "../api/FaceAuthClient";
 import type { CameraStartOptions } from "../camera/camera.types";
 import { CameraOverlay } from "../components/CameraOverlay";
 import type {
   CapturePhase,
   FaceCaptureFailure,
   FaceCaptureResult,
+  MendixAuthenticateResult,
 } from "../types/auth.types";
 
 /**
@@ -19,9 +25,15 @@ import type {
 export interface FaceAuthSDKConfig {
   /**
    * Debian face-auth API origin, e.g. https://face-auth.customer.local
-   * Used by authenticate() when backend wiring is enabled.
+   * Required for authenticate().
    */
   apiBaseUrl?: string;
+
+  /** Optional fetch override (tests / restricted Mendix environments). */
+  fetchFn?: typeof fetch;
+
+  /** POST /authenticate timeout in ms. Default 30_000. */
+  authTimeoutMs?: number;
 
   camera?: CameraStartOptions;
   title?: string;
@@ -39,12 +51,11 @@ export interface FaceAuthSDKCameraSession {
 /**
  * Imperative facade shipped to the Mendix team as an npm package.
  *
- * Mendix only:
+ * Mendix production entry:
  *   const sdk = createFaceAuthSDK({ apiBaseUrl: "https://..." });
- *   const frame = await sdk.captureFace();
- *   // later: await sdk.authenticate(employeeId, frame)
+ *   const { employeeId, authenticated } = await sdk.authenticate("EMP001");
  *
- * Mendix must NOT open getUserMedia or build camera UI.
+ * Mendix must NOT open getUserMedia, build camera UI, or call the backend directly.
  */
 export class FaceAuthSDK {
   private readonly config: FaceAuthSDKConfig;
@@ -53,6 +64,7 @@ export class FaceAuthSDK {
   private cameraOpen = false;
   private ownedHost = false;
   private pipelineEnabled = false;
+  private authClient: FaceAuthClient | null = null;
   private captureWaiters: {
     resolve: (result: FaceCaptureResult) => void;
     reject: (error: Error) => void;
@@ -67,8 +79,41 @@ export class FaceAuthSDK {
   }
 
   /**
-   * Production Mendix entry: one call runs the full browser loop and returns
-   * the best JPEG for the Debian backend.
+   * Mendix authenticate action — one call for the full Week 1 kiosk flow.
+   *
+   * 1. Opens SDK camera overlay (unless `capture` already provided)
+   * 2. face → blink → burst → auto-close
+   * 3. POST JPEG + employeeId to Debian /authenticate
+   * 4. Returns slim result for Mendix ({ employeeId, authenticated })
+   *
+   * Wrong face → authenticated=false (not thrown).
+   * Pipeline / network failures → FaceAuthApiError.
+   */
+  async authenticate(
+    employeeId: string,
+    capture?: FaceCaptureResult,
+  ): Promise<MendixAuthenticateResult> {
+    const normalizedId = employeeId.trim();
+    if (!normalizedId) {
+      throw new Error("FaceAuthSDK.authenticate() requires a non-empty employeeId.");
+    }
+
+    const frame = capture ?? (await this.captureFace());
+    const apiResult = await this.getAuthClient().authenticate({
+      employeeId: normalizedId,
+      image: frame,
+    });
+
+    return {
+      employeeId: apiResult.employeeId,
+      authenticated: apiResult.authenticated,
+    };
+  }
+
+  /**
+   * Browser capture only — returns the best JPEG for manual/backend testing.
+   *
+   * Mendix should prefer authenticate() which captures and verifies in one step.
    *
    * Flow: camera → face → blink → burst → auto-close → FaceCaptureResult
    */
@@ -129,6 +174,7 @@ export class FaceAuthSDK {
     );
     this.pipelineEnabled = false;
     this.cameraOpen = false;
+    this.authClient = null;
 
     if (this.root) {
       this.root.unmount();
@@ -141,6 +187,27 @@ export class FaceAuthSDK {
 
     this.hostNode = null;
     this.ownedHost = false;
+  }
+
+  private getAuthClient(): FaceAuthClient {
+    const base = this.config.apiBaseUrl?.trim();
+    if (!base) {
+      throw new FaceAuthApiError("apiBaseUrl is required for authenticate().", {
+        httpStatus: 0,
+        code: "API_NOT_CONFIGURED",
+        detail: "Pass apiBaseUrl to createFaceAuthSDK({ apiBaseUrl: '...' }).",
+      });
+    }
+
+    if (!this.authClient) {
+      this.authClient = createFaceAuthClient({
+        apiBaseUrl: base,
+        fetchFn: this.config.fetchFn,
+        timeoutMs: this.config.authTimeoutMs,
+      });
+    }
+
+    return this.authClient;
   }
 
   private ensureMounted(): void {
@@ -167,7 +234,6 @@ export class FaceAuthSDK {
     this.captureWaiters = null;
     this.pipelineEnabled = false;
     waiters?.resolve(result);
-    // Overlay closes camera via onClose after cleanup.
   }
 
   private finishCaptureFailure(failure: FaceCaptureFailure): void {
@@ -181,7 +247,6 @@ export class FaceAuthSDK {
       });
       waiters.reject(error);
     }
-    // Overlay closes camera via onClose after cleanup.
   }
 
   private rejectCapture(error: Error): void {

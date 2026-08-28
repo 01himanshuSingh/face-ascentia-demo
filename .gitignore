@@ -59,3 +59,7 @@ backend/models/*.onnx
 backend/models/*.tflite
 backend/models/*.task
 backend/models/*.download
+
+# Dev enroll test photos — never commit biometrics
+backend/testing/dev-enroll/sample-images/*
+!backend/testing/dev-enroll/sample-images/.gitkeep

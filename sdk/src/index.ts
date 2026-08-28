@@ -13,9 +13,8 @@
  *     apiBaseUrl: "https://face-auth.customer.example",
  *   });
  *
- *   // One Authenticate button:
- *   const frame = await sdk.captureFace();
- *   // later: POST frame.blob to Debian /authenticate with employeeId
+ *   // Mendix Authenticate button (capture + backend verify):
+ *   const { employeeId, authenticated } = await sdk.authenticate("EMP001");
  *
  *   await sdk.destroy();
  */
@@ -32,6 +31,17 @@ export type {
   FaceCaptureResult,
   FaceCaptureFailure,
   AuthenticateResult,
+  MendixAuthenticateResult,
+  AuthErrorBody,
+} from "./types/auth.types";
+
+export {
+  AUTHENTICATE_EMPLOYEE_ID_FIELD,
+  AUTHENTICATE_IMAGE_FIELD,
+  AUTHENTICATE_PATH,
+  AuthErrorCode,
+  isAuthenticateResult,
+  isAuthErrorBody,
 } from "./types/auth.types";
 
 export type {
@@ -44,6 +54,15 @@ export type {
 } from "./camera/camera.types";
 
 export { FACE_AUTH_CAMERA_POLICY } from "./camera/camera.types";
+
+export {
+  createFaceAuthClient,
+  FaceAuthClient,
+  FaceAuthApiError,
+  type FaceAuthClientConfig,
+  type AuthenticateRequest,
+  type FaceAuthClientErrorCode,
+} from "./api/FaceAuthClient";
 
 /** Advanced / test-only exports — Mendix should prefer createFaceAuthSDK(). */
 export { CameraOverlay, type CameraOverlayProps } from "./components/CameraOverlay";
