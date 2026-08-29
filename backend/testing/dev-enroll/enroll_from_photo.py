@@ -88,11 +88,6 @@ def parse_args() -> argparse.Namespace:
         help="Display name stored on employees.full_name.",
     )
     parser.add_argument(
-        "--department",
-        default=None,
-        help="Optional employees.department value.",
-    )
-    parser.add_argument(
         "--plant-code",
         default="DEV01",
         help="Plant code (creates plant if missing). Default DEV01.",
@@ -171,13 +166,11 @@ def get_or_create_employee(
     employee_id: str,
     plant_id: uuid.UUID,
     full_name: str,
-    department: str | None,
 ) -> Employee:
     employee = db.get(Employee, employee_id)
     if employee is not None:
         employee.plant_id = plant_id
         employee.full_name = full_name
-        employee.department = department
         employee.status = EmployeeStatus.ACTIVE.value
         return employee
 
@@ -185,7 +178,6 @@ def get_or_create_employee(
         employee_id=employee_id,
         plant_id=plant_id,
         full_name=full_name,
-        department=department,
         status=EmployeeStatus.ACTIVE.value,
     )
     db.add(employee)
@@ -256,7 +248,6 @@ def main() -> int:
             employee_id=employee_id,
             plant_id=plant.plant_id,
             full_name=full_name,
-            department=args.department,
         )
         enrollment = upsert_active_enrollment(
             db,

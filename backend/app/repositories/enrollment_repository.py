@@ -6,6 +6,8 @@ Authentication reads exactly one ACTIVE template per employee (1:1 verify).
 
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -27,3 +29,29 @@ def get_active_by_employee_id(
         .limit(1)
     )
     return db.scalars(stmt).first()
+
+
+def create_active(
+    db: Session,
+    *,
+    employee_id: str,
+    plant_id: uuid.UUID,
+    embedding: list[float],
+    model_version: str,
+    source_request_id: uuid.UUID | None = None,
+) -> Enrollment:
+    enrollment = Enrollment(
+        employee_id=employee_id,
+        plant_id=plant_id,
+        embedding=embedding,
+        status=EnrollmentStatus.ACTIVE.value,
+        model_version=model_version,
+        source_request_id=source_request_id,
+    )
+    db.add(enrollment)
+    db.flush()
+    db.refresh(enrollment)
+    return enrollment
+
+
+__all__ = ["create_active", "get_active_by_employee_id"]

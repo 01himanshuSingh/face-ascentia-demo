@@ -24,6 +24,7 @@ export {
   createFaceAuthSDK,
   type FaceAuthSDKConfig,
   type FaceAuthSDKCameraSession,
+  type AuthenticateOrRegisterOutcome,
 } from "./sdk/FaceAuthSDK";
 
 export type {
@@ -55,10 +56,33 @@ export type {
 
 export { FACE_AUTH_CAMERA_POLICY } from "./camera/camera.types";
 
+export type {
+  RegisterRequest,
+  RegisterResult,
+  RegistrationErrorBody,
+  PlantListItem,
+} from "./types/registration.types";
+
+export {
+  PLANTS_PATH,
+  REGISTER_PATH,
+  REGISTER_EMPLOYEE_ID_FIELD,
+  REGISTER_PLANT_ID_FIELD,
+  REGISTER_FULL_NAME_FIELD,
+  REGISTER_IMAGE_FIELD,
+  RegistrationErrorCode,
+  RegistrationStatus,
+  RegistrationSource,
+  isRegisterResult,
+  isRegistrationErrorBody,
+  isPlantListResponse,
+} from "./types/registration.types";
+
 export {
   createFaceAuthClient,
   FaceAuthClient,
   FaceAuthApiError,
+  isFaceAuthApiError,
   type FaceAuthClientConfig,
   type AuthenticateRequest,
   type FaceAuthClientErrorCode,
@@ -66,6 +90,7 @@ export {
 
 /** Advanced / test-only exports — Mendix should prefer createFaceAuthSDK(). */
 export { CameraOverlay, type CameraOverlayProps } from "./components/CameraOverlay";
+export { RegisterOverlay, type RegisterOverlayProps, type RegisterSubmitPayload } from "./components/RegisterOverlay";
 export { createCameraManager, CameraManager } from "./camera/CameraManager";
 export type { CameraManagerApi } from "./camera/camera.types";
 export {

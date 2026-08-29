@@ -27,7 +27,16 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
     // Allow ngrok / tunnel hosts for kiosk camera smoke tests over HTTPS.
     allowedHosts: [".ngrok-free.dev", ".ngrok.io", ".ngrok.app"],
+    // Same-origin proxy: ngrok HTTPS → localhost:8000 (avoids mixed-content / phone localhost bug).
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
   },
 });

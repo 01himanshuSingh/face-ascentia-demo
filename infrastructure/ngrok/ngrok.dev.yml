@@ -1,0 +1,10 @@
+# Dev tunnels for test-harness (5173) + FastAPI backend (8000).
+# Run from repo root: ngrok start --all --config infrastructure/ngrok/ngrok.dev.yml
+version: "3"
+tunnels:
+  harness:
+    addr: 5173
+    proto: http
+  backend:
+    addr: 8000
+    proto: http

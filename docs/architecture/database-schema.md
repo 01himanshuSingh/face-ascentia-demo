@@ -166,15 +166,17 @@ CREATE INDEX idx_enroll_vector
 
 **Purpose:** Permanent history of employee registration attempts (kiosk or admin-initiated). Never deleted; only status changes.
 
+**Kiosk employee self-register (Path A):** row created by `POST /register` after authenticate returns `ENROLLMENT_NOT_FOUND`. The employee confirms Employee ID on Mendix Register UI; the SDK reuses the auth capture JPEG (no second camera session). Status starts `PENDING`, `source=KIOSK`. See `registration-flow.md`.
+
 | Column | Type | Constraint / Note |
 |--------|------|-------------------|
 | `request_id` | UUID | PRIMARY KEY, default `gen_random_uuid()` |
 | `employee_id` | TEXT | FK → `employees(employee_id)`, NOT NULL, INDEXED |
 | `plant_id` | UUID | FK → `plants(plant_id)`, NOT NULL, INDEXED |
-| `kiosk_id` | TEXT | nullable |
-| `source` | TEXT | CHECK IN (`'KIOSK'`, `'ADMIN_PORTAL'`) |
+| `kiosk_id` | TEXT | nullable — **optional; not sent in current rollout** (Path A + Path B) |
+| `source` | TEXT | CHECK IN (`'KIOSK'`, `'ADMIN_PORTAL'`, `'ADMIN_KIOSK'`) |
 | `status` | TEXT | CHECK IN (`'PENDING'`, `'APPROVED'`, `'REJECTED'`), DEFAULT `'PENDING'` |
-| `session_id` | TEXT | temporary capture session reference |
+| `session_id` | TEXT | SDK capture-session id (Path A: same as auth capture; nullable until SDK sends) |
 | `reviewed_by` | TEXT | FK → `employees(employee_id)`, nullable |
 | `reviewed_at` | TIMESTAMPTZ | nullable |
 | `decision_reason` | TEXT | nullable |

@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.database.base import Base
-from app.database import models  # noqa: F401 — register Week 1 models
+from app.database import models  # noqa: F401 — register ORM models for Alembic
 
 config = context.config
 

@@ -17,6 +17,7 @@ from app.database.base import Base
 if TYPE_CHECKING:
     from app.database.models.employee import Employee
     from app.database.models.plant import Plant
+    from app.database.models.registration_request import RegistrationRequest
 
 
 class Enrollment(Base):
@@ -24,8 +25,8 @@ class Enrollment(Base):
     Face enrollment template used by authentication.
 
     Week 1 note:
-    - source_request_id is stored as a nullable UUID without FK until
-      registration_requests is implemented in a later phase.
+    - source_request_id FK added in migration 20260829_0002 once
+      registration_requests exists.
     - VECTOR dimension is provisional (schema docs); verify against SFace
       before production migrations are considered final.
     """
@@ -71,9 +72,9 @@ class Enrollment(Base):
         nullable=False,
         server_default=EnrollmentStatus.ACTIVE.value,
     )
-    # FK to registration_requests deferred until that table exists (Week 1).
     source_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("registration_requests.request_id", ondelete="SET NULL"),
         nullable=True,
     )
     model_version: Mapped[str] = mapped_column(Text, nullable=False)
@@ -96,4 +97,7 @@ class Enrollment(Base):
     plant: Mapped[Plant] = relationship(back_populates="enrollments")
     revoked_by_employee: Mapped[Employee | None] = relationship(
         foreign_keys=[revoked_by],
+    )
+    source_request: Mapped[RegistrationRequest | None] = relationship(
+        foreign_keys=[source_request_id],
     )

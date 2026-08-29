@@ -3,8 +3,8 @@ Face Authentication API — FastAPI application entry.
 
 HTTP edge wiring:
   - CORS for Mendix / test-harness
-  - /authenticate router
-  - AuthError → AuthErrorResponse (single mapping point)
+  - /authenticate and /register routers
+  - AppError → AuthErrorResponse | RegistrationErrorResponse (single handler)
 """
 
 from __future__ import annotations
@@ -13,7 +13,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.plants import router as plants_router
+from app.api.routes.registration import router as registration_router
 from app.common.exceptions import AppError
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -31,13 +34,16 @@ _origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins if _origins != ["*"] else ["*"],
-    allow_credentials=True,
+    allow_credentials=_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --- Routes ---
 app.include_router(auth_router)
+app.include_router(registration_router)
+app.include_router(plants_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

@@ -1,50 +1,45 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import {
-  createFaceAuthClient,
   createFaceAuthSDK,
-  FaceAuthApiError,
-  type AuthenticateResult,
+  isFaceAuthApiError,
   type CapturePhase,
   type FaceAuthSDK,
   type MendixAuthenticateResult,
+  type RegisterResult,
 } from "@face-auth/sdk";
 
 /**
  * Mendix integration stand-in.
  *
- * This file shows exactly what the Mendix team wires in their host page:
- *
- *   const sdk = createFaceAuthSDK({ apiBaseUrl: "https://face-auth.customer.example" });
- *   const { employeeId, authenticated } = await sdk.authenticate(employeeIdFromMendix);
- *   if (authenticated) { /* allow app login *\/ }
- *
- * Mendix owns: Employee ID field, Authenticate button, business navigation.
- * SDK owns: camera UI, blink, capture, HTTPS call to Debian backend.
+ * Mendix page: Employee ID + Authenticate only.
+ * SDK: camera, blink, capture, backend verify, Register overlay when not enrolled.
  */
 export function App() {
   const sdkRef = useRef<FaceAuthSDK | null>(null);
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState("EMP003");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<CapturePhase>("idle");
   const [status, setStatus] = useState(
-    "Enter Employee ID and tap Authenticate.",
+    "Enter Employee ID and tap Authenticate. If not enrolled, select Plant + name in Register UI.",
   );
   const [authResult, setAuthResult] = useState<MendixAuthenticateResult | null>(
     null,
   );
-  const [authDetail, setAuthDetail] = useState<AuthenticateResult | null>(null);
+  const [registerResult, setRegisterResult] = useState<RegisterResult | null>(
+    null,
+  );
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  const apiBaseUrl =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
+    (import.meta.env.DEV ? "/api" : undefined);
 
   useEffect(() => {
     const sdk = createFaceAuthSDK({
       apiBaseUrl,
       title: "Face authentication",
       onPhaseChange: setPhase,
-      onCameraClose: () => {
-        setBusy(false);
-      },
+      // Do not clear busy here — camera closes before authenticate/register finishes.
     });
     sdkRef.current = sdk;
 
@@ -65,53 +60,62 @@ export function App() {
     if (!id) {
       setStatus("Employee ID is required.");
       setAuthResult(null);
+      setRegisterResult(null);
       return;
     }
 
     if (!apiBaseUrl?.trim()) {
       setStatus("Configure VITE_API_BASE_URL (Debian face-auth API origin).");
       setAuthResult(null);
+      setRegisterResult(null);
       return;
     }
 
     setBusy(true);
     setAuthResult(null);
-    setAuthDetail(null);
-    setStatus("SDK started — camera, blink, capture, then backend verify…");
+    setRegisterResult(null);
+    setStatus("SDK — camera, blink, capture, then POST /authenticate…");
 
     try {
-      // Mendix production: await sdk.authenticate(id) → { employeeId, authenticated }
-      // Harness dev: capture + client so we can show score/threshold on screen.
-      const frame = await sdk.captureFace();
-      const detail = await createFaceAuthClient({ apiBaseUrl: apiBaseUrl.trim() }).authenticate({
-        employeeId: id,
-        image: frame,
-      });
+      const outcome = await sdk.authenticateOrRegister(id);
 
-      const mendixResult: MendixAuthenticateResult = {
-        employeeId: detail.employeeId,
-        authenticated: detail.authenticated,
-      };
-      setAuthResult(mendixResult);
-      setAuthDetail(detail);
-
-      const scoreText =
-        detail.score != null ? detail.score.toFixed(3) : "n/a";
-      const thresholdText = detail.threshold.toFixed(3);
-
-      if (detail.authenticated) {
+      if (outcome.outcome === "authenticated") {
+        setAuthResult({
+          employeeId: outcome.employeeId,
+          authenticated: true,
+        });
         setStatus(
-          `Match YES — score ${scoreText} ≥ threshold ${thresholdText}. Mendix allows login.`,
+          "authenticated: true — Mendix may start its login session / navigation.",
         );
-      } else {
-        setStatus(
-          `Match NO — score ${scoreText} < threshold ${thresholdText}. Mendix denies login.`,
-        );
+        return;
       }
+
+      if (outcome.outcome === "denied") {
+        setAuthResult({
+          employeeId: outcome.employeeId,
+          authenticated: false,
+        });
+        setStatus(
+          "authenticated: false — face did not match enrollment. Mendix denies login.",
+        );
+        return;
+      }
+
+      setRegisterResult(outcome.registration);
+      setStatus(
+        `${outcome.registration.message} (requestId: ${outcome.registration.requestId}, status: ${outcome.registration.status})`,
+      );
     } catch (error) {
       setAuthResult(null);
-      if (error instanceof FaceAuthApiError) {
+      setRegisterResult(null);
+
+      if (isFaceAuthApiError(error)) {
         setStatus(`${error.detail} (${error.code})`);
+      } else if (
+        error instanceof Error &&
+        (error as Error & { code?: string }).code === "CANCELLED"
+      ) {
+        setStatus("Capture or registration cancelled.");
       } else {
         const message =
           error instanceof Error ? error.message : "Authentication failed.";
@@ -128,10 +132,8 @@ export function App() {
         <p style={styles.eyebrow}>Face Auth · Mendix integration sample</p>
         <h1 style={styles.title}>Host page stand-in</h1>
         <p style={styles.copy}>
-          Same contract the Mendix team uses: pass <code style={styles.inlineCode}>apiBaseUrl</code>,
-          call <code style={styles.inlineCode}>authenticate(employeeId)</code>, branch on{" "}
-          <code style={styles.inlineCode}>authenticated</code>. Mendix never opens the camera
-          or calls the backend directly.
+          Mendix: Employee ID + Authenticate. If not enrolled, SDK opens Register UI
+          (Plant + Employee ID + Full name — photo reused from auth).
         </p>
 
         <form style={styles.form} onSubmit={onAuthenticate}>
@@ -143,7 +145,7 @@ export function App() {
             style={styles.input}
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value)}
-            placeholder="e.g. EMP001"
+            placeholder="e.g. EMP003 (employee, no enrollment)"
             autoComplete="off"
             disabled={busy}
           />
@@ -157,7 +159,7 @@ export function App() {
             }}
             disabled={busy}
           >
-            {busy ? "Authenticating…" : "Authenticate"}
+            {busy ? "Working…" : "Authenticate"}
           </button>
         </form>
 
@@ -165,14 +167,6 @@ export function App() {
           Capture phase: {phase}
           {apiBaseUrl ? ` · API ${apiBaseUrl}` : " · API not configured"}
         </p>
-
-        {authDetail && (
-          <p style={styles.metrics}>
-            face_score={authDetail.score?.toFixed(3) ?? "n/a"} · threshold=
-            {authDetail.threshold.toFixed(3)} · match=
-            {authDetail.authenticated ? "YES" : "NO"}
-          </p>
-        )}
 
         {authResult && (
           <div
@@ -190,6 +184,21 @@ export function App() {
           </div>
         )}
 
+        {registerResult && (
+          <div
+            style={{
+              ...styles.resultBadge,
+              ...styles.resultPending,
+            }}
+            role="status"
+            aria-live="polite"
+          >
+            <strong>registration: {registerResult.status}</strong>
+            <span>employeeId: {registerResult.employeeId}</span>
+            <span>requestId: {registerResult.requestId}</span>
+          </div>
+        )}
+
         <p style={styles.status}>{status}</p>
 
         <section style={styles.integrationBox}>
@@ -198,11 +207,11 @@ export function App() {
   apiBaseUrl: "${apiBaseUrl ?? "https://face-auth.customer.example"}",
 });
 
-const { employeeId, authenticated } =
-  await sdk.authenticate(employeeIdFromMendix);
-
-if (authenticated) {
-  // proceed with Mendix session / navigation
+const outcome = await sdk.authenticateOrRegister(employeeId);
+if (outcome.outcome === "authenticated") {
+  // Mendix login session
+} else if (outcome.outcome === "registered") {
+  // PENDING — wait for admin portal approve
 }`}</pre>
         </section>
       </main>
@@ -249,10 +258,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     lineHeight: 1.5,
     color: "#3d4550",
-  },
-  inlineCode: {
-    fontFamily: "ui-monospace, monospace",
-    fontSize: "0.92em",
   },
   form: {
     display: "flex",
@@ -308,11 +313,10 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid #f5a8a0",
     color: "#8a1f17",
   },
-  metrics: {
-    margin: 0,
-    fontSize: 13,
-    fontFamily: "ui-monospace, monospace",
-    color: "#1f3a5f",
+  resultPending: {
+    background: "#fef9e7",
+    border: "1px solid #f0d060",
+    color: "#7a5c00",
   },
   status: {
     margin: 0,

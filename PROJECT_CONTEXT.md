@@ -98,7 +98,12 @@ The Mendix team does not receive the backend source code.
 11. Backend returns the decision.
 12. SDK returns the result to Mendix.
 
-If the employee is not enrolled, the SDK opens its own Registration UI and uses the existing capture/session according to the registration flow.
+If the employee is not face-enrolled (or not in the system yet), the SDK opens **Register UI** (Path A):
+
+- **[Employee Register] (Path A — registration-first hybrid)** — SDK overlay: **Plant + Employee ID + Full name**. SDK **reuses the JPEG from authenticate** → `POST /register` (PENDING). **No pre-existing HR row required** — employee + enrollment created only when plant admin **approves** in Admin Portal (HR compares against offline backup).
+- **[Admin Login] (Path B)** — Admin enters ID + password at kiosk, then **fresh face capture + Employee ID per employee** → `POST /kiosk/admin-enroll` (ACTIVE immediately). **Not built yet** — see `AGENTS.md`.
+
+See `docs/architecture/registration-flow.md` and `AGENTS.md`.
 
 ## UI Hosting
 
@@ -115,7 +120,7 @@ Mendix page
           |
           +-- CameraOverlay
           |
-          +-- Registration UI
+          +-- RegisterOverlay (Plant + Employee ID + Full name)
 ```
 
 Only the backend requires separate server hosting.
@@ -151,9 +156,9 @@ Week 1 focuses on:
 
 Do NOT prematurely implement Week 2+ infrastructure/features such as Redis, Celery, Nginx, PgBouncer, or production deployment.
 
-## Week 1 Work Completed (current status)
+## Week 1 Work Completed (baseline — 2026-08-28)
 
-Last updated: 2026-08-28. End-to-end **login with enrolled face** works on **desktop Chrome / laptop kiosk-style testing**.
+End-to-end **login with enrolled face** works on **desktop Chrome / laptop kiosk-style testing**.
 
 ### Backend — implemented
 
@@ -222,7 +227,7 @@ auth | employee=EMP001 | face_score=0.485 | threshold=0.463 | match=YES | detect
 | EMP001 | Himanshu | `my_face.jpeg` |
 | EMP002 | Anmol | `anmol_photo.jpeg` |
 
-Replace with real registration API/UI in Week 2+.
+**Note:** For quick login testing without the register→approve flow, use `enroll_from_photo.py` (creates employee + ACTIVE enrollment directly). Production kiosk path uses `POST /register` + admin approve.
 
 ### Infrastructure — running locally
 
@@ -265,18 +270,19 @@ Observed genuine-match score example: **~0.485** (photo enroll vs live webcam) �
 - **Same laptop:** ngrok frontend + `localhost:8000` backend works
 - **Mobile / remote device:** fails unless backend is also tunneled and `VITE_API_BASE_URL` points to backend ngrok URL
 
-### Known limitations (as of Week 1)
+### Known limitations (pre–Aug 29)
 
 | Topic | Status |
 |-------|--------|
-| Production registration API/UI | Not built — dev enroll script only |
+| Production registration API/UI | Was dev enroll script only — **Path A built Aug 29** (see below) |
 | Redis / Celery / Nginx / PgBouncer | Deferred Week 2+ |
-| admin-portal | Not started |
+| admin-portal UI | Backend review API done; **React admin-portal UI not wired** |
 | Mobile browser blink | Unreliable — MediaPipe too slow + EAR tuned for desktop webcam |
 | **Android box kiosk (current hardware)** | **Not ready** — needs Android-specific SDK camera/blink tuning or native capture path |
 | Desktop Chrome + USB webcam kiosk | **Target platform** — works in testing |
 | Mendix npm package publish | SDK code ready; packaging/deploy to Mendix pending |
 | Threshold tuning per plant | Starting value 0.463; tune after field score logs |
+| Admin kiosk batch (Path B) | Documented in `AGENTS.md`; **not implemented** |
 
 ### Android kiosk — SDK changes still needed (not implemented)
 
@@ -290,14 +296,99 @@ If kiosk is **Android box + browser/WebView** (not PC + USB cam):
 
 See conversation notes; do not assume ngrok fixes Android blink.
 
-### Next steps (Week 2+ direction)
+## Work completed 2026-08-29 — Registration-first hybrid (Path A)
 
-1. Production registration flow (replace dev enroll script)
-2. Mendix SDK npm package handoff + integration
-3. Backend deploy on client Debian server (Docker)
-4. Duplicate-face check at enrollment (pgvector HNSW 1:N)
-5. Android kiosk SDK profile if Android box remains target hardware
-6. Connection pooling / ops for ~70 kiosks (per architecture docs)
+**Design decision:** HR keeps employee master data **offline** (separate machine / paper). Kiosk intake does **not** require a pre-loaded `employees` row. Plant admin reviews PENDING requests plant-wise against offline records; **approve** creates `employees` + ACTIVE `enrollments`.
+
+### Architecture (Path A)
+
+```text
+Authenticate → face capture → ENROLLMENT_NOT_FOUND or EMPLOYEE_NOT_FOUND
+       ↓
+Register overlay: Plant + Employee ID + Full name (photo reused)
+       ↓
+POST /register → registration_requests (PENDING) + raw_images
+       ↓
+Plant admin queue (filtered by plant_id)
+       ↓
+Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
+```
+
+### Backend — implemented today
+
+| Area | Files / endpoints | Status |
+|------|-------------------|--------|
+| Migration `20260829_0005` | Drop `registration_requests.employee_id` FK; add `submitted_full_name` | Done |
+| `POST /register` | `plant_id`, `employee_id`, `full_name`, `image` — no HR pre-row | Done |
+| `GET /plants` | Active plant list for kiosk dropdown | Done |
+| Registration service | `services/registration.py` — plant-scoped duplicate check at submit | Done |
+| Admin login | `POST /admin/login` (bcrypt, `admin_roles`) | Done |
+| Admin pending queue | `GET /admin/registrations/pending` (plant-scoped) | Done |
+| Admin image view | `GET /admin/registrations/{id}/image` | Done |
+| Admin approve / reject | Creates employee + enrollment on approve; audit log | Done |
+| Repositories | `plant_repository`, `admin_role_repository`, extended registration/employee/enrollment/audit | Done |
+
+**Alembic head:** `20260829_0005`
+
+### SDK — implemented today
+
+| Area | Files | Status |
+|------|-------|--------|
+| `RegisterOverlay` | Plant dropdown + Employee ID + Full name | Done |
+| `FaceAuthClient.listPlants()` | `GET /plants` | Done |
+| `FaceAuthClient.register()` | Sends `plant_id`, `full_name` multipart fields | Done |
+| `authenticateOrRegister()` | Opens register on `ENROLLMENT_NOT_FOUND` **or** `EMPLOYEE_NOT_FOUND` | Done |
+| `isFaceAuthApiError()` | Duck-type guard for error handling | Done |
+| Types | `registration.types.ts` — plant list + new error codes | Done |
+
+### Test harness — updated today
+
+| Area | Change |
+|------|--------|
+| `test-harness/src/App.tsx` | Uses `sdk.authenticateOrRegister()`; documents Plant + name register UI |
+
+### Dev scripts — added today
+
+| Script | Purpose |
+|--------|---------|
+| `backend/testing/dev-enroll/seed_employee_only.py` | Optional: seed employee without enrollment (legacy pre-data testing) |
+| `backend/testing/dev-enroll/seed_admin.py` | Seed `PLANT_ADMIN` for Admin Portal API testing (`ADMIN001` / `changeme`) |
+
+### Docs updated today
+
+| File | Change |
+|------|--------|
+| `docs/architecture/registration-flow.md` | Registration-first hybrid spec, admin review endpoints |
+
+### End-to-end self-register test flow
+
+```text
+1. docker compose up -d && alembic upgrade head
+2. python testing/dev-enroll/seed_admin.py   # optional: admin for approve step
+3. uvicorn app.main:app --reload --port 8000
+4. cd test-harness && npm run dev
+5. Authenticate with any new Employee ID → Register UI → select Plant, enter name → Submit → PENDING
+6. Admin: POST /admin/login → GET /admin/registrations/pending → approve
+7. Re-authenticate → login succeeds
+```
+
+### Still not built (Path A / B gaps)
+
+| Area | Status |
+|------|--------|
+| Admin Portal React UI | Scaffold only — use Admin API directly or wire UI next |
+| SDK Not Enrolled two-button overlay (Register vs Admin Login) | Register path works via `authenticateOrRegister`; explicit STATE 3 UI pending |
+| Path B — `/kiosk/admin-login`, `/kiosk/admin-enroll`, `/kiosk/admin-logout` | Not built (`AGENTS.md`) |
+| `session_id` on authenticate/register | Optional column; SDK generates UUID but full auth contract wiring deferred |
+
+### Next steps
+
+1. Wire **admin-portal** React app to Admin API (pending queue, approve/reject, image view)
+2. SDK **Not Enrolled** overlay with [Employee Register] / [Admin Login] buttons (STATE 3 per `AGENTS.md`)
+3. Implement Path B admin kiosk batch enrollment (`/kiosk/admin-*`)
+4. Mendix SDK npm package handoff + integration
+5. Backend deploy on client Debian server (Docker)
+6. Android kiosk SDK profile if Android box remains target hardware
 
 ## Technology Stack
 

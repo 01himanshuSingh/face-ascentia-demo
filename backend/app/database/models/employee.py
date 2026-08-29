@@ -33,7 +33,6 @@ class Employee(Base):
         nullable=False,
     )
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
-    department: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         Text,
         nullable=False,

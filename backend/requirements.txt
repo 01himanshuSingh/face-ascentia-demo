@@ -14,3 +14,4 @@ httpx
 opencv-python
 onnxruntime
 mediapipe
+bcrypt

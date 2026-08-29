@@ -4,29 +4,27 @@ Shared application exceptions (Debian FastAPI).
 System design
 -------------
 Raise domain exceptions in repositories / services.
-Map once at the HTTP edge (main.py exception handler) → AuthErrorResponse JSON.
+Map once at the HTTP edge (main.py exception handler) → stable JSON error bodies.
 
-  repositories / face services
-        ↓  raise AppError subclass
-  FastAPI handler
-        ↓  { "detail": "...", "code": "EMPLOYEE_NOT_FOUND" }
+  services / repositories
+        ↓  raise AuthError or RegistrationError
+  AppError.to_error_response()
+        ↓  AuthErrorResponse  |  RegistrationErrorResponse
   FaceAuthSDK / Mendix
-        ↓  branch on `code`; success path still uses AuthenticateResponse
+        ↓  branch on `code`
 
 Rules
 -----
 1. HTTP status lives on the exception — routes stay thin.
-2. `code` must match schemas.auth.AuthErrorCode (stable for the npm SDK).
-3. Wrong-face match (authenticated=false) is NOT an exception — return 200
-   AuthenticateResponse. Exceptions are for "could not complete verification".
-4. Keep this module free of SQLAlchemy / OpenCV / MediaPipe imports so any
-   layer can raise without pulling heavy deps.
+2. `code` must match the endpoint's schema enum (AuthErrorCode / RegistrationErrorCode).
+3. Wrong-face match (authenticated=false) is NOT an exception — return 200 AuthenticateResponse.
+4. No SQLAlchemy / OpenCV / MediaPipe imports in this module.
 
-Extensibility
--------------
-Week 1: auth errors below.
-Later: RegistrationError / AdminError subclasses of AppError with their own
-code enums — same handler pattern, no rewrite of auth.
+Registration note
+-----------------
+Face pipeline (detect / embed) stays in face_verification and raises AuthError.
+RegistrationService catches AuthError and re-labels via RegistrationError.from_auth_error()
+so POST /register always returns RegistrationErrorCode — no duplicate image exception classes.
 """
 
 from __future__ import annotations
@@ -34,6 +32,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.schemas.auth import AuthErrorCode, AuthErrorResponse
+from app.schemas.admin import AdminErrorCode, AdminErrorResponse
+from app.schemas.registration import RegistrationErrorCode, RegistrationErrorResponse
 
 
 class AppError(Exception):
@@ -56,11 +56,19 @@ class AppError(Exception):
         self.message = message
         self.code = code
         self.http_status = http_status
-        # Optional structured context for logs / future API fields — never secrets.
         self.details = details or {}
 
-    def to_error_response(self) -> AuthErrorResponse:
-        """Build the HTTP error body defined in schemas.auth."""
+    def to_error_response(
+        self,
+    ) -> AuthErrorResponse | RegistrationErrorResponse | AdminErrorResponse:
+        """Build the HTTP error body for the endpoint domain."""
+        if isinstance(self, AdminError):
+            return AdminErrorResponse(detail=self.message, code=self.admin_code)
+        if isinstance(self, RegistrationError):
+            return RegistrationErrorResponse(
+                detail=self.message,
+                code=self.registration_code,
+            )
         if isinstance(self, AuthError):
             return AuthErrorResponse(detail=self.message, code=self.auth_code)
         return AuthErrorResponse(
@@ -77,7 +85,7 @@ class AppError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Authentication domain (Week 1 1:1 path)
+# Authentication domain (POST /authenticate)
 # ---------------------------------------------------------------------------
 
 
@@ -224,8 +232,189 @@ class EmbeddingDimensionMismatchError(AuthError):
         )
 
 
+# ---------------------------------------------------------------------------
+# Registration domain (POST /register — Path A kiosk self-register)
+# ---------------------------------------------------------------------------
+
+
+class RegistrationError(AppError):
+    """
+    Namespace for employee self-register failures.
+
+    Registration-only guard failures use named subclasses below.
+    Shared face-pipeline failures are re-labeled from AuthError via from_auth_error().
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: RegistrationErrorCode,
+        http_status: int = 400,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            code=code.value,
+            http_status=http_status,
+            details=details,
+        )
+        self.registration_code = code
+
+    @classmethod
+    def from_auth_error(cls, exc: AuthError) -> RegistrationError:
+        """
+        Map AuthError from face_verification to RegistrationErrorResponse codes.
+
+        Shared codes (NO_FACE, EMBED_FAILED, …) use identical string values in
+        RegistrationErrorCode — only the response schema enum differs per endpoint.
+        """
+        try:
+            reg_code = RegistrationErrorCode(exc.code)
+        except ValueError as err:
+            raise ValueError(
+                f"AuthError code {exc.code!r} has no RegistrationErrorCode mapping."
+            ) from err
+        return cls(
+            exc.message,
+            code=reg_code,
+            http_status=exc.http_status,
+            details=exc.details or None,
+        )
+
+
+class RegistrationMissingEmployeeIdError(RegistrationError):
+    def __init__(self) -> None:
+        super().__init__(
+            "employee_id is required.",
+            code=RegistrationErrorCode.MISSING_EMPLOYEE_ID,
+            http_status=400,
+        )
+
+
+class RegistrationMissingFullNameError(RegistrationError):
+    def __init__(self) -> None:
+        super().__init__(
+            "full_name is required.",
+            code=RegistrationErrorCode.MISSING_FULL_NAME,
+            http_status=400,
+        )
+
+
+class RegistrationMissingPlantIdError(RegistrationError):
+    def __init__(self) -> None:
+        super().__init__(
+            "plant_id is required.",
+            code=RegistrationErrorCode.MISSING_PLANT_ID,
+            http_status=400,
+        )
+
+
+class RegistrationPlantNotFoundError(RegistrationError):
+    def __init__(self, plant_id: str) -> None:
+        super().__init__(
+            f"Plant '{plant_id}' was not found or is inactive.",
+            code=RegistrationErrorCode.PLANT_NOT_FOUND,
+            http_status=404,
+            details={"plant_id": plant_id},
+        )
+
+
+class RegistrationPlantMismatchError(RegistrationError):
+    def __init__(self, *, employee_id: str, expected_plant_id: str) -> None:
+        super().__init__(
+            f"Employee '{employee_id}' belongs to a different plant.",
+            code=RegistrationErrorCode.PLANT_MISMATCH,
+            http_status=409,
+            details={"employee_id": employee_id, "expected_plant_id": expected_plant_id},
+        )
+
+
+class RegistrationEmployeeNotFoundError(RegistrationError):
+    def __init__(self, employee_id: str) -> None:
+        super().__init__(
+            f"Employee '{employee_id}' was not found.",
+            code=RegistrationErrorCode.EMPLOYEE_NOT_FOUND,
+            http_status=404,
+            details={"employee_id": employee_id},
+        )
+
+
+class RegistrationEmployeeInactiveError(RegistrationError):
+    def __init__(self, employee_id: str) -> None:
+        super().__init__(
+            f"Employee '{employee_id}' is inactive.",
+            code=RegistrationErrorCode.EMPLOYEE_INACTIVE,
+            http_status=403,
+            details={"employee_id": employee_id},
+        )
+
+
+class AlreadyEnrolledError(RegistrationError):
+    """Employee already has ACTIVE enrollment — cannot self-register."""
+
+    def __init__(self, employee_id: str) -> None:
+        super().__init__(
+            f"Employee '{employee_id}' already has an ACTIVE face enrollment.",
+            code=RegistrationErrorCode.ALREADY_ENROLLED,
+            http_status=409,
+            details={"employee_id": employee_id},
+        )
+
+
+class PendingRegistrationExistsError(RegistrationError):
+    """At most one PENDING request per employee (idx_one_pending_per_emp)."""
+
+    def __init__(self, employee_id: str) -> None:
+        super().__init__(
+            f"A PENDING registration request already exists for employee '{employee_id}'.",
+            code=RegistrationErrorCode.PENDING_REGISTRATION_EXISTS,
+            http_status=409,
+            details={"employee_id": employee_id},
+        )
+
+
+class DuplicateFaceError(RegistrationError):
+    """Live embedding matches another employee's ACTIVE enrollment (1:N guard)."""
+
+    def __init__(self, *, matched_employee_id: str | None = None) -> None:
+        details: dict[str, Any] = {}
+        if matched_employee_id is not None:
+            details["matched_employee_id"] = matched_employee_id
+        super().__init__(
+            "This face matches an existing enrollment for another employee.",
+            code=RegistrationErrorCode.DUPLICATE_FACE,
+            http_status=409,
+            details=details or None,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Admin Portal domain
+# ---------------------------------------------------------------------------
+
+
+class AdminError(AppError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: AdminErrorCode,
+        http_status: int = 400,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            code=code.value,
+            http_status=http_status,
+            details=details,
+        )
+        self.admin_code = code
+
+
 __all__ = [
     "AppError",
+    "AdminError",
     "AuthError",
     "MissingEmployeeIdError",
     "EmployeeNotFoundError",
@@ -240,4 +429,11 @@ __all__ = [
     "FaceDetectFailedError",
     "FaceEmbedFailedError",
     "EmbeddingDimensionMismatchError",
+    "RegistrationError",
+    "RegistrationMissingEmployeeIdError",
+    "RegistrationEmployeeNotFoundError",
+    "RegistrationEmployeeInactiveError",
+    "AlreadyEnrolledError",
+    "PendingRegistrationExistsError",
+    "DuplicateFaceError",
 ]

@@ -3,21 +3,21 @@
  *
  * Architecture
  * ------------
- *   FaceAuthSDK.authenticate()
+ *   FaceAuthSDK.authenticate() / register()
  *         ↓
- *   FaceAuthClient.authenticate()     ← this module
+ *   FaceAuthClient.authenticate() | register()     ← this module
  *         ↓
- *   POST {apiBaseUrl}/authenticate
+ *   POST {apiBaseUrl}/authenticate  |  /register
  *         multipart: employee_id + image (JPEG)
  *         ↓
- *   AuthenticateResult (HTTP 200)  OR  FaceAuthApiError (4xx/5xx/network)
+ *   AuthenticateResult (200) | RegisterResult (201)  OR  FaceAuthApiError
  *
  * System boundary
  * ---------------
  * - Owns HTTPS transport only (FormData + fetch).
  * - Does NOT open the camera or run liveness (FaceAuthSDK).
- * - Returns the full backend JSON — FaceAuthSDK maps to Mendix slim result.
- * - Wrong face is HTTP 200 with authenticated=false (not thrown).
+ * - Wrong face on auth is HTTP 200 with authenticated=false (not thrown).
+ * - Register success is HTTP 201 PENDING — does not log user into Mendix.
  *
  * Mendix never imports this directly; use createFaceAuthSDK().
  */
@@ -35,10 +35,31 @@ import {
   isAuthErrorBody,
   isAuthenticateResult,
 } from "../types/auth.types";
+import type {
+  PlantListResponse,
+  RegisterRequest,
+  RegisterResult,
+  RegistrationErrorBody,
+  RegistrationErrorCode,
+} from "../types/registration.types";
+import {
+  PLANTS_PATH,
+  REGISTER_EMPLOYEE_ID_FIELD,
+  REGISTER_FULL_NAME_FIELD,
+  REGISTER_IMAGE_FIELD,
+  REGISTER_KIOSK_ID_FIELD,
+  REGISTER_PATH,
+  REGISTER_PLANT_ID_FIELD,
+  REGISTER_SESSION_ID_FIELD,
+  isPlantListResponse,
+  isRegisterResult,
+  isRegistrationErrorBody,
+} from "../types/registration.types";
 
 /** Client-only failure codes (not returned by Debian API). */
 export type FaceAuthClientErrorCode =
   | AuthErrorCode
+  | RegistrationErrorCode
   | "API_NOT_CONFIGURED"
   | "NETWORK_ERROR"
   | "INVALID_RESPONSE";
@@ -66,9 +87,11 @@ export interface AuthenticateRequest {
   filename?: string;
 }
 
+export type { RegisterRequest, RegisterResult };
+
 /**
- * Thrown when POST /authenticate fails (4xx/5xx) or the client cannot complete
- * the request. Wrong-face match is NOT thrown — see AuthenticateResult.
+ * Thrown when POST /authenticate or POST /register fails (4xx/5xx) or the
+ * client cannot complete the request.
  */
 export class FaceAuthApiError extends Error {
   readonly httpStatus: number;
@@ -90,11 +113,13 @@ export class FaceAuthApiError extends Error {
     this.detail = options.detail;
   }
 
-  /** True when the server returned a structured AuthErrorBody. */
+  /** True when the server returned a structured error body. */
   get isServerError(): boolean {
-    return this.code !== "NETWORK_ERROR" &&
+    return (
+      this.code !== "NETWORK_ERROR" &&
       this.code !== "INVALID_RESPONSE" &&
-      this.code !== "API_NOT_CONFIGURED";
+      this.code !== "API_NOT_CONFIGURED"
+    );
   }
 
   static fromAuthErrorBody(
@@ -107,6 +132,29 @@ export class FaceAuthApiError extends Error {
       detail: body.detail,
     });
   }
+
+  static fromRegistrationErrorBody(
+    body: RegistrationErrorBody,
+    httpStatus: number,
+  ): FaceAuthApiError {
+    return new FaceAuthApiError(body.detail, {
+      httpStatus,
+      code: body.code,
+      detail: body.detail,
+    });
+  }
+}
+
+/** Duck-type check — avoids instanceof failures when bundlers duplicate the class. */
+export function isFaceAuthApiError(error: unknown): error is FaceAuthApiError {
+  return (
+    error instanceof FaceAuthApiError ||
+    (error instanceof Error &&
+      error.name === "FaceAuthApiError" &&
+      typeof (error as FaceAuthApiError).code === "string" &&
+      typeof (error as FaceAuthApiError).httpStatus === "number" &&
+      typeof (error as FaceAuthApiError).detail === "string")
+  );
 }
 
 export class FaceAuthClient {
@@ -132,6 +180,55 @@ export class FaceAuthClient {
     return `${this.apiBaseUrl}${AUTHENTICATE_PATH}`;
   }
 
+  get registerUrl(): string {
+    return `${this.apiBaseUrl}${REGISTER_PATH}`;
+  }
+
+  get plantsUrl(): string {
+    return `${this.apiBaseUrl}${PLANTS_PATH}`;
+  }
+
+  /** GET /plants — active plants for Register UI dropdown. */
+  async listPlants(): Promise<PlantListResponse> {
+    let response: Response;
+    try {
+      response = await this.fetchFn(this.plantsUrl, {
+        method: "GET",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Network request failed.";
+      throw new FaceAuthApiError(detail, {
+        httpStatus: 0,
+        code: "NETWORK_ERROR",
+        detail,
+      });
+    }
+
+    const httpStatus = response.status;
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new FaceAuthApiError("Backend returned a non-JSON response.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail: `Expected JSON from GET ${PLANTS_PATH}.`,
+      });
+    }
+
+    if (response.ok && isPlantListResponse(payload)) {
+      return payload;
+    }
+
+    throw new FaceAuthApiError("Failed to load plant list.", {
+      httpStatus,
+      code: "INVALID_RESPONSE",
+      detail: `GET ${PLANTS_PATH} failed.`,
+    });
+  }
+
   /**
    * POST /authenticate — Employee ID + one JPEG still.
    *
@@ -140,15 +237,57 @@ export class FaceAuthClient {
    */
   async authenticate(request: AuthenticateRequest): Promise<AuthenticateResult> {
     const employeeId = request.employeeId.trim();
-    const { blob, filename } = this.resolveImagePayload(request.image, request.filename);
+    const { blob, filename } = this.resolveImagePayload(
+      request.image,
+      request.filename,
+    );
 
     const form = new FormData();
     form.append(AUTHENTICATE_EMPLOYEE_ID_FIELD, employeeId);
     form.append(AUTHENTICATE_IMAGE_FIELD, blob, filename);
 
-    let response: Response;
+    const response = await this.postMultipart(this.authenticateUrl, form);
+    return this.parseAuthenticateResponse(response);
+  }
+
+  /**
+   * POST /register — Employee ID + JPEG (normally reused from authenticate).
+   *
+   * @returns PENDING registration confirmation (HTTP 201).
+   * @throws FaceAuthApiError on transport or validation failures.
+   */
+  async register(request: RegisterRequest): Promise<RegisterResult> {
+    const employeeId = request.employeeId.trim();
+    const plantId = request.plantId.trim();
+    const fullName = request.fullName.trim();
+    const { blob, filename } = this.resolveImagePayload(
+      request.image,
+      request.filename,
+    );
+
+    const form = new FormData();
+    form.append(REGISTER_EMPLOYEE_ID_FIELD, employeeId);
+    form.append(REGISTER_PLANT_ID_FIELD, plantId);
+    form.append(REGISTER_FULL_NAME_FIELD, fullName);
+    form.append(REGISTER_IMAGE_FIELD, blob, filename);
+
+    const kioskId = request.kioskId?.trim();
+    if (kioskId) {
+      form.append(REGISTER_KIOSK_ID_FIELD, kioskId);
+    }
+
+    const sessionId = request.sessionId?.trim();
+    if (sessionId) {
+      form.append(REGISTER_SESSION_ID_FIELD, sessionId);
+    }
+
+    const response = await this.postMultipart(this.registerUrl, form);
+    return this.parseRegisterResponse(response);
+  }
+
+  private async postMultipart(url: string, form: FormData): Promise<Response> {
     try {
-      response = await this.fetchFn(this.authenticateUrl, {
+      return await this.fetchFn(url, {
         method: "POST",
         body: form,
         signal: AbortSignal.timeout(this.timeoutMs),
@@ -162,8 +301,6 @@ export class FaceAuthClient {
         detail,
       });
     }
-
-    return this.parseAuthenticateResponse(response);
   }
 
   private resolveImagePayload(
@@ -203,7 +340,8 @@ export class FaceAuthClient {
         throw new FaceAuthApiError("Backend returned an invalid success body.", {
           httpStatus,
           code: "INVALID_RESPONSE",
-          detail: "Missing employeeId, authenticated, score, threshold, or message.",
+          detail:
+            "Missing employeeId, authenticated, score, threshold, or message.",
         });
       }
       return payload;
@@ -213,7 +351,48 @@ export class FaceAuthClient {
       throw FaceAuthApiError.fromAuthErrorBody(payload, httpStatus);
     }
 
-    throw new FaceAuthApiError("Unexpected error response from backend.", {
+    throw this.unexpectedErrorResponse(payload, httpStatus, AUTHENTICATE_PATH);
+  }
+
+  private async parseRegisterResponse(response: Response): Promise<RegisterResult> {
+    const httpStatus = response.status;
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      throw new FaceAuthApiError("Backend returned a non-JSON response.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail: `Expected JSON from POST ${REGISTER_PATH}.`,
+      });
+    }
+
+    if (httpStatus === 201 && isRegisterResult(payload)) {
+      return payload;
+    }
+
+    if (isRegistrationErrorBody(payload)) {
+      throw FaceAuthApiError.fromRegistrationErrorBody(payload, httpStatus);
+    }
+
+    if (response.ok && !isRegisterResult(payload)) {
+      throw new FaceAuthApiError("Backend returned an invalid success body.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail: "Missing requestId, employeeId, plantId, status, source, or message.",
+      });
+    }
+
+    throw this.unexpectedErrorResponse(payload, httpStatus, REGISTER_PATH);
+  }
+
+  private unexpectedErrorResponse(
+    payload: unknown,
+    httpStatus: number,
+    path: string,
+  ): FaceAuthApiError {
+    return new FaceAuthApiError("Unexpected error response from backend.", {
       httpStatus,
       code: "INVALID_RESPONSE",
       detail:
@@ -222,7 +401,7 @@ export class FaceAuthClient {
         "detail" in payload &&
         typeof (payload as { detail: unknown }).detail === "string"
           ? (payload as { detail: string }).detail
-          : `HTTP ${httpStatus} from POST ${AUTHENTICATE_PATH}.`,
+          : `HTTP ${httpStatus} from POST ${path}.`,
     });
   }
 }

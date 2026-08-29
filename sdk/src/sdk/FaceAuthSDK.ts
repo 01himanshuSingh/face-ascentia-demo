@@ -4,16 +4,21 @@ import { createRoot, type Root } from "react-dom/client";
 import {
   createFaceAuthClient,
   FaceAuthApiError,
+  isFaceAuthApiError,
   type FaceAuthClient,
 } from "../api/FaceAuthClient";
 import type { CameraStartOptions } from "../camera/camera.types";
 import { CameraOverlay } from "../components/CameraOverlay";
-import type {
-  CapturePhase,
-  FaceCaptureFailure,
-  FaceCaptureResult,
-  MendixAuthenticateResult,
+import { RegisterOverlay } from "../components/RegisterOverlay";
+import {
+  AuthErrorCode,
+  type CapturePhase,
+  type FaceCaptureFailure,
+  type FaceCaptureResult,
+  type MendixAuthenticateResult,
 } from "../types/auth.types";
+import type { PlantListItem, RegisterResult } from "../types/registration.types";
+import type { RegisterSubmitPayload } from "../components/RegisterOverlay";
 
 /**
  * Public configuration for the Face Authentication SDK (npm → Mendix team).
@@ -25,14 +30,14 @@ import type {
 export interface FaceAuthSDKConfig {
   /**
    * Debian face-auth API origin, e.g. https://face-auth.customer.local
-   * Required for authenticate().
+   * Required for authenticate() and register().
    */
   apiBaseUrl?: string;
 
   /** Optional fetch override (tests / restricted Mendix environments). */
   fetchFn?: typeof fetch;
 
-  /** POST /authenticate timeout in ms. Default 30_000. */
+  /** POST /authenticate and /register timeout in ms. Default 30_000. */
   authTimeoutMs?: number;
 
   camera?: CameraStartOptions;
@@ -48,14 +53,38 @@ export interface FaceAuthSDKCameraSession {
   readonly isOpen: boolean;
 }
 
+/** Path A outcome when using authenticateOrRegister(). */
+export type AuthenticateOrRegisterOutcome =
+  | {
+      outcome: "authenticated";
+      employeeId: string;
+      authenticated: true;
+    }
+  | {
+      outcome: "denied";
+      employeeId: string;
+      authenticated: false;
+    }
+  | {
+      outcome: "registered";
+      registration: RegisterResult;
+    };
+
 /**
  * Imperative facade shipped to the Mendix team as an npm package.
  *
- * Mendix production entry:
+ * Mendix login page (Employee ID + Authenticate only):
  *   const sdk = createFaceAuthSDK({ apiBaseUrl: "https://..." });
- *   const { employeeId, authenticated } = await sdk.authenticate("EMP001");
  *
- * Mendix must NOT open getUserMedia, build camera UI, or call the backend directly.
+ * Option A — Mendix handles ENROLLMENT_NOT_FOUND:
+ *   try { await sdk.authenticate(id); } catch (e) {
+ *     if (e.code === "ENROLLMENT_NOT_FOUND") await sdk.promptRegisterAndSubmit(id);
+ *   }
+ *
+ * Option B — SDK handles not-enrolled + register UI:
+ *   await sdk.authenticateOrRegister(id);
+ *
+ * Mendix session/login remains Mendix-owned after authenticated=true.
  */
 export class FaceAuthSDK {
   private readonly config: FaceAuthSDKConfig;
@@ -65,8 +94,25 @@ export class FaceAuthSDK {
   private ownedHost = false;
   private pipelineEnabled = false;
   private authClient: FaceAuthClient | null = null;
+
+  /** JPEG from the most recent authenticate capture — reused for register(). */
+  private lastCapture: FaceCaptureResult | null = null;
+  /** Correlates auth + register when sent to backend (optional). */
+  private lastSessionId: string | null = null;
+
+  private registerOverlayOpen = false;
+  private registerDefaultEmployeeId = "";
+  private registerPlants: PlantListItem[] = [];
+  private registerBusy = false;
+  private registerError: string | null = null;
+
   private captureWaiters: {
     resolve: (result: FaceCaptureResult) => void;
+    reject: (error: Error) => void;
+  } | null = null;
+
+  private registerFlowWaiters: {
+    resolve: (result: RegisterResult) => void;
     reject: (error: Error) => void;
   } | null = null;
 
@@ -78,16 +124,16 @@ export class FaceAuthSDK {
     return { isOpen: this.cameraOpen };
   }
 
+  /** Last kiosk capture (for harness / register reuse). Null after successful register. */
+  getLastCapture(): FaceCaptureResult | null {
+    return this.lastCapture;
+  }
+
   /**
-   * Mendix authenticate action — one call for the full Week 1 kiosk flow.
+   * Mendix authenticate — one camera capture + POST /authenticate.
    *
-   * 1. Opens SDK camera overlay (unless `capture` already provided)
-   * 2. face → blink → burst → auto-close
-   * 3. POST JPEG + employeeId to Debian /authenticate
-   * 4. Returns slim result for Mendix ({ employeeId, authenticated })
-   *
+   * Stores the capture in memory for a follow-up register() on ENROLLMENT_NOT_FOUND.
    * Wrong face → authenticated=false (not thrown).
-   * Pipeline / network failures → FaceAuthApiError.
    */
   async authenticate(
     employeeId: string,
@@ -99,23 +145,143 @@ export class FaceAuthSDK {
     }
 
     const frame = capture ?? (await this.captureFace());
-    const apiResult = await this.getAuthClient().authenticate({
+    this.storeCaptureSession(frame);
+
+    try {
+      const apiResult = await this.getAuthClient().authenticate({
+        employeeId: normalizedId,
+        image: frame,
+      });
+
+      if (apiResult.authenticated) {
+        this.clearCaptureSession();
+      }
+
+      return {
+        employeeId: apiResult.employeeId,
+        authenticated: apiResult.authenticated,
+      };
+    } catch (error) {
+      if (isFaceAuthApiError(error) && this.isRegisterEligibleAuthError(error.code)) {
+        throw error;
+      }
+      this.clearCaptureSession();
+      throw error;
+    }
+  }
+
+  private isRegisterEligibleAuthError(
+    code: string,
+  ): code is typeof AuthErrorCode.ENROLLMENT_NOT_FOUND | typeof AuthErrorCode.EMPLOYEE_NOT_FOUND {
+    return (
+      code === AuthErrorCode.ENROLLMENT_NOT_FOUND ||
+      code === AuthErrorCode.EMPLOYEE_NOT_FOUND
+    );
+  }
+
+  /**
+   * Path A register — POST /register with reused auth JPEG (no camera).
+   *
+   * @param capture Override lastCapture (harness only); production uses auth capture.
+   */
+  async register(
+    payload: RegisterSubmitPayload,
+    capture?: FaceCaptureResult,
+  ): Promise<RegisterResult> {
+    const normalizedId = payload.employeeId.trim();
+    const plantId = payload.plantId.trim();
+    const fullName = payload.fullName.trim();
+    if (!normalizedId || !plantId || !fullName) {
+      throw new Error(
+        "FaceAuthSDK.register() requires employeeId, plantId, and fullName.",
+      );
+    }
+
+    const frame = capture ?? this.lastCapture;
+    if (!frame) {
+      throw new Error(
+        "No face capture available for register(). Complete authenticate() first.",
+      );
+    }
+
+    const result = await this.getAuthClient().register({
       employeeId: normalizedId,
+      plantId,
+      fullName,
       image: frame,
+      sessionId: this.lastSessionId ?? undefined,
     });
 
-    return {
-      employeeId: apiResult.employeeId,
-      authenticated: apiResult.authenticated,
-    };
+    this.clearCaptureSession();
+    return result;
+  }
+
+  /**
+   * Registration-first Register overlay — Plant + Employee ID + Full name.
+   */
+  async promptRegisterAndSubmit(defaultEmployeeId: string): Promise<RegisterResult> {
+    if (!this.lastCapture) {
+      throw new Error(
+        "No face capture available. authenticate() must run first.",
+      );
+    }
+
+    if (typeof document === "undefined") {
+      throw new Error("FaceAuthSDK.promptRegisterAndSubmit() requires a browser environment.");
+    }
+
+    const { plants } = await this.getAuthClient().listPlants();
+    this.registerPlants = plants;
+
+    this.ensureMounted();
+    this.registerDefaultEmployeeId = defaultEmployeeId.trim();
+    this.registerError = null;
+    this.registerBusy = false;
+    this.registerOverlayOpen = true;
+    this.render();
+
+    return new Promise<RegisterResult>((resolve, reject) => {
+      this.registerFlowWaiters = { resolve, reject };
+    });
+  }
+
+  /**
+   * Convenience: authenticate → on not enrolled open Register UI → PENDING request.
+   * Mendix login session is still only created when outcome=authenticated.
+   */
+  async authenticateOrRegister(
+    employeeId: string,
+  ): Promise<AuthenticateOrRegisterOutcome> {
+    const normalizedId = employeeId.trim();
+    if (!normalizedId) {
+      throw new Error("FaceAuthSDK.authenticateOrRegister() requires a non-empty employeeId.");
+    }
+
+    try {
+      const auth = await this.authenticate(normalizedId);
+      if (auth.authenticated) {
+        return {
+          outcome: "authenticated",
+          employeeId: auth.employeeId,
+          authenticated: true,
+        };
+      }
+      return {
+        outcome: "denied",
+        employeeId: auth.employeeId,
+        authenticated: false,
+      };
+    } catch (error) {
+      if (isFaceAuthApiError(error) && this.isRegisterEligibleAuthError(error.code)) {
+        const registration = await this.promptRegisterAndSubmit(normalizedId);
+        return { outcome: "registered", registration };
+      }
+      throw error;
+    }
   }
 
   /**
    * Browser capture only — returns the best JPEG for manual/backend testing.
-   *
-   * Mendix should prefer authenticate() which captures and verifies in one step.
-   *
-   * Flow: camera → face → blink → burst → auto-close → FaceCaptureResult
    */
   async captureFace(): Promise<FaceCaptureResult> {
     if (typeof document === "undefined") {
@@ -135,7 +301,6 @@ export class FaceAuthSDK {
     });
   }
 
-  /** Manual open without capture pipeline (local smoke tests only). */
   async openCamera(): Promise<FaceAuthSDKCameraSession> {
     if (typeof document === "undefined") {
       throw new Error("FaceAuthSDK.openCamera() requires a browser environment.");
@@ -172,9 +337,14 @@ export class FaceAuthSDK {
     this.rejectCapture(
       Object.assign(new Error("SDK destroyed."), { code: "CANCELLED" }),
     );
+    this.rejectRegisterFlow(
+      Object.assign(new Error("SDK destroyed."), { code: "CANCELLED" }),
+    );
     this.pipelineEnabled = false;
     this.cameraOpen = false;
+    this.registerOverlayOpen = false;
     this.authClient = null;
+    this.clearCaptureSession();
 
     if (this.root) {
       this.root.unmount();
@@ -189,10 +359,27 @@ export class FaceAuthSDK {
     this.ownedHost = false;
   }
 
+  private storeCaptureSession(frame: FaceCaptureResult): void {
+    this.lastCapture = frame;
+    this.lastSessionId = this.createSessionId();
+  }
+
+  private clearCaptureSession(): void {
+    this.lastCapture = null;
+    this.lastSessionId = null;
+  }
+
+  private createSessionId(): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `capture-${Date.now()}`;
+  }
+
   private getAuthClient(): FaceAuthClient {
     const base = this.config.apiBaseUrl?.trim();
     if (!base) {
-      throw new FaceAuthApiError("apiBaseUrl is required for authenticate().", {
+      throw new FaceAuthApiError("apiBaseUrl is required for FaceAuthSDK API calls.", {
         httpStatus: 0,
         code: "API_NOT_CONFIGURED",
         detail: "Pass apiBaseUrl to createFaceAuthSDK({ apiBaseUrl: '...' }).",
@@ -256,8 +443,75 @@ export class FaceAuthSDK {
     waiters?.reject(error);
   }
 
+  private rejectRegisterFlow(error: Error): void {
+    const waiters = this.registerFlowWaiters;
+    this.registerFlowWaiters = null;
+    this.registerOverlayOpen = false;
+    this.registerBusy = false;
+    this.registerError = null;
+    waiters?.reject(error);
+  }
+
+  private finishRegisterFlowSuccess(result: RegisterResult): void {
+    const waiters = this.registerFlowWaiters;
+    this.registerFlowWaiters = null;
+    this.registerOverlayOpen = false;
+    this.registerBusy = false;
+    this.registerError = null;
+    waiters?.resolve(result);
+  }
+
+  private handleRegisterCancel(): void {
+    this.rejectRegisterFlow(
+      Object.assign(new Error("Registration cancelled."), { code: "CANCELLED" }),
+    );
+    this.render();
+  }
+
+  private async handleRegisterSubmit(payload: RegisterSubmitPayload): Promise<void> {
+    this.registerBusy = true;
+    this.registerError = null;
+    this.render();
+
+    try {
+      const result = await this.register(payload);
+      this.finishRegisterFlowSuccess(result);
+      this.render();
+    } catch (error) {
+      this.registerBusy = false;
+      if (isFaceAuthApiError(error)) {
+        this.registerError = error.detail;
+      } else if (error instanceof Error) {
+        this.registerError = error.message;
+      } else {
+        this.registerError = "Registration failed.";
+      }
+      this.render();
+    }
+  }
+
   private render(): void {
     if (!this.root) {
+      return;
+    }
+
+    if (this.registerOverlayOpen) {
+      this.root.render(
+        createElement(RegisterOverlay, {
+          key: this.registerDefaultEmployeeId || "register",
+          open: true,
+          plants: this.registerPlants,
+          defaultEmployeeId: this.registerDefaultEmployeeId,
+          busy: this.registerBusy,
+          errorMessage: this.registerError,
+          onSubmit: (payload) => {
+            void this.handleRegisterSubmit(payload);
+          },
+          onCancel: () => {
+            this.handleRegisterCancel();
+          },
+        }),
+      );
       return;
     }
 
@@ -290,3 +544,5 @@ export class FaceAuthSDK {
 export function createFaceAuthSDK(config: FaceAuthSDKConfig = {}): FaceAuthSDK {
   return new FaceAuthSDK(config);
 }
+
+export type { RegisterResult };
