@@ -193,7 +193,7 @@ auth | employee=EMP001 | face_score=0.485 | threshold=0.463 | match=YES | detect
 |------|-------|--------|
 | Public SDK facade | `sdk/src/sdk/FaceAuthSDK.ts` | Done |
 | Mendix entry: `authenticate(employeeId)` | returns `{ employeeId, authenticated }` only | Done |
-| HTTP client | `sdk/src/api/FaceAuthClient.ts` | Done |
+| HTTP client | `sdk/src/api/FaceAuthClient.ts` | Done (Android WebView timeout fix 2026-08-31) |
 | Types + error codes | `sdk/src/types/auth.types.ts` | Done |
 | Camera lifecycle | `sdk/src/camera/CameraManager.ts` | Done |
 | Camera overlay + capture pipeline | `sdk/src/components/CameraOverlay.tsx` | Done |
@@ -236,11 +236,13 @@ auth | employee=EMP001 | face_score=0.485 | threshold=0.463 | match=YES | detect
 | PostgreSQL + pgvector | `docker compose up -d` (repo root) | **5433** → 5432 |
 | Backend | `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` | **8000** |
 | Test harness | `cd test-harness && npm run dev` | **5173** |
+| Admin Portal | `cd admin-portal && npm run dev` | **5174** |
 
 **Env files:**
 
 - `face-auth-ascentia/.env` — backend DB (`DATABASE_URL`, postgres creds)
-- `test-harness/.env` — `VITE_API_BASE_URL=http://localhost:8000`
+- `test-harness/.env` — `VITE_API_BASE_URL=/api` (dev default; Vite proxies `/api` → `localhost:8000`)
+- `admin-portal/.env` — optional; dev default proxies `/api` → `localhost:8000`
 
 **Docker container:** `face-auth-db` (persists data across PC restarts via Docker volume).
 
@@ -267,8 +269,10 @@ Observed genuine-match score example: **~0.485** (photo enroll vs live webcam) �
 
 - ngrok on port **5173** exposes test harness over HTTPS (camera requires secure context)
 - ngrok does **not** enable blink detection — blink runs locally in browser
-- **Same laptop:** ngrok frontend + `localhost:8000` backend works
-- **Mobile / remote device:** fails unless backend is also tunneled and `VITE_API_BASE_URL` points to backend ngrok URL
+- **Recommended for Android kiosk / phone:** one ngrok tunnel on **5173** only; set `VITE_API_BASE_URL=/api` so API calls go same-origin through Vite proxy → `localhost:8000` on the dev laptop
+- **Do not use `http://localhost:8000` on a remote device** — on Android, `localhost` is the kiosk/phone itself, not the dev machine
+- **Alternative:** second ngrok tunnel on **8000** and set `VITE_API_BASE_URL=https://your-backend.ngrok-free.dev`
+- Test harness loads SDK from `sdk/src` via Vite alias — save SDK files and hard-refresh kiosk page; restart `npm run dev` if HMR does not apply on device
 
 ### Known limitations (pre–Aug 29)
 
@@ -276,7 +280,7 @@ Observed genuine-match score example: **~0.485** (photo enroll vs live webcam) �
 |-------|--------|
 | Production registration API/UI | Was dev enroll script only — **Path A built Aug 29** (see below) |
 | Redis / Celery / Nginx / PgBouncer | Deferred Week 2+ |
-| admin-portal UI | Backend review API done; **React admin-portal UI not wired** |
+| admin-portal UI | **Done (2026-08-31)** — login, plant-scoped queue, approve/reject, image view |
 | Mobile browser blink | Unreliable — MediaPipe too slow + EAR tuned for desktop webcam |
 | **Android box kiosk (current hardware)** | **Not ready** — needs Android-specific SDK camera/blink tuning or native capture path |
 | Desktop Chrome + USB webcam kiosk | **Target platform** — works in testing |
@@ -374,23 +378,142 @@ Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
 8. Re-authenticate → login succeeds after approve
 ```
 
-### Still not built (Path A / B gaps)
+### Still not built (Path A / B gaps — partial update 2026-08-31)
 
 | Area | Status |
 |------|--------|
-| Admin Portal React UI | Scaffold only — use Admin API directly or wire UI next |
+| Admin Portal React UI | **Done** — see 2026-08-31 section |
+| Admin Portal grant PLANT_ADMIN UI | API done; SUPER_ADMIN UI pending |
 | SDK Not Enrolled two-button overlay (Register vs Admin Login) | Register path works via `authenticateOrRegister`; explicit STATE 3 UI pending |
 | Path B — `/kiosk/admin-login`, `/kiosk/admin-enroll`, `/kiosk/admin-logout` | Not built (`AGENTS.md`) |
+| Android kiosk capture profile (camera + blink) | Not built — field testing blocked blink smoothness |
 | `session_id` on authenticate/register | Optional column; SDK generates UUID but full auth contract wiring deferred |
 
-### Next steps
+### Next steps (superseded — see 2026-08-31 section below)
 
-1. Wire **admin-portal** React app to Admin API (pending queue, approve/reject, image view)
+1. ~~Wire **admin-portal** React app~~ — done
 2. SDK **Not Enrolled** overlay with [Employee Register] / [Admin Login] buttons (STATE 3 per `AGENTS.md`)
 3. Implement Path B admin kiosk batch enrollment (`/kiosk/admin-*`)
 4. Mendix SDK npm package handoff + integration
 5. Backend deploy on client Debian server (Docker)
-6. Android kiosk SDK profile if Android box remains target hardware
+6. Android kiosk SDK capture profile if Android box remains target hardware
+
+## Work completed 2026-08-31 — Admin Portal, RBAC, SDK polish, kiosk HTTP fix
+
+### Backend — implemented
+
+| Area | Files / endpoints | Status |
+|------|-------------------|--------|
+| Admin RBAC catalog | `admin_permissions`, `admin_role_permissions` models | Done |
+| Migrations | `20260831_0006_admin_permissions_rbac`, `20260831_0007_v1_plant_admin_registration_only` | Done |
+| v1 roles | `SUPER_ADMIN` (all plants) + `PLANT_ADMIN` (one plant); `SUB_ADMIN` deferred | Done |
+| Grant API | `POST /admin/users/grant` — SUPER_ADMIN grants PLANT_ADMIN | Done |
+| Permission checks on review | `admin_rbac.py`, `admin_grant.py`; approve/reject gated | Done |
+| Dev seeds | `seed_super_admin.py`, `seed_admin.py` (Path A flow; no worker pre-seed) | Done |
+
+**Alembic head:** `20260831_0007`
+
+### Admin Portal — implemented
+
+| Area | Files | Status |
+|------|-------|--------|
+| React app + Vite + Tailwind v4 | `admin-portal/src/` | Done |
+| Login | `LoginForm.tsx`, `useAdminSession.ts` — `ADMIN001` / `changeme` | Done |
+| Pending queue | `RequestTable.tsx`, `useRegistrationQueue.ts` (TanStack Query) | Done |
+| Review UI | `RequestDetails.tsx`, `DecisionDialog.tsx` — approve/reject + face image | Done |
+| API client | `adminApi.ts` — `X-Admin-Session-Token` header (not cookies for v1) | Done |
+| Dev proxy | `admin-portal/vite.config.ts` — `/api` → `localhost:8000` | Done |
+
+### SDK — implemented
+
+| Area | Files | Status |
+|------|-------|--------|
+| Register UI redesign | `RegisterOverlay.tsx`, `PlantSelectDropdown.tsx` | Done |
+| Operator feedback toast | `AuthScoreToast.tsx`, `showSdkFeedbackToast.ts`, wired in `FaceAuthSDK.ts` | Done |
+| Register cancel → new capture | `handleRegisterCancel()` clears capture session | Done |
+| Android WebView HTTP timeout fix | `FaceAuthClient.ts` — `fetchWithTimeout()` via `AbortController` (no `AbortSignal.timeout()`) | Done |
+
+**Config surfaced on SDK:** `showFeedbackToast`, `feedbackToastDurationMs`, `faceTimeoutMs`, `blinkTimeoutMs`, `authTimeoutMs`, `camera`.
+
+### End-to-end Path A test flow (current)
+
+```text
+1. docker compose up -d && cd backend && alembic upgrade head
+2. python testing/dev-enroll/seed_super_admin.py
+3. python testing/dev-enroll/seed_admin.py
+4. uvicorn app.main:app --reload --port 8000
+5. cd test-harness && npm run dev          # :5173
+6. cd admin-portal && npm run dev          # :5174 (optional, for approve/reject)
+7. ngrok http 5173                         # Android kiosk opens HTTPS ngrok URL
+8. Kiosk: authenticateOrRegister → Register if not enrolled → admin approves → re-auth succeeds
+```
+
+## Android / kiosk field testing (2026-08-31)
+
+Real-device testing on **Android mobile / Android box kiosk** via **ngrok + test harness** surfaced issues separate from desktop Chrome.
+
+### Errors observed on kiosk
+
+| Error / symptom | Root cause | Status |
+|-----------------|------------|--------|
+| `AbortSignal.timeout is not a function` during `authenticateOrRegister` | `FaceAuthClient` used `AbortSignal.timeout()` — missing on many Android WebViews | **Fixed** — `fetchWithTimeout()` uses `AbortController` + `setTimeout` |
+| Request failed / cannot reach backend when API is `http://localhost:8000` | On Android, `localhost` = the device itself, not the dev laptop | **Config fix** — use `VITE_API_BASE_URL=/api` with ngrok on **5173**, or tunnel backend separately |
+| Blink slow, misses fast blinks, or times out | MediaPipe landmark loop + EAR thresholds tuned for desktop webcam; Android runs fewer samples per second | **Not fixed** — needs SDK capture profile (see below) |
+| Camera may work but liveness feels laggy | High default camera resolution on phones + heavy `landmarker.detect()` every frame | **Not fixed** — needs profile-based camera + loop throttle |
+
+### Fixes applied (network / WebView)
+
+- `sdk/src/api/FaceAuthClient.ts` — no `AbortSignal.timeout()`; Android-safe timeout wrapper
+- Dev routing: ngrok **5173** + harness `VITE_API_BASE_URL=/api` → Vite proxy → backend **8000** on laptop
+- No SDK `npm run build` required for harness dev — Vite aliases `@face-auth/sdk` → `sdk/src`; hard-refresh kiosk after SDK edits
+
+### Kiosk face auth — what we can do now
+
+**Immediate (ready today — config + retest):**
+
+1. Run backend + test harness + ngrok as documented above
+2. Confirm harness footer shows **`API /api`**, not `localhost:8000`
+3. Retest `authenticateOrRegister` on Android after hard refresh
+4. Use Admin Portal (`:5174`, `ADMIN001`) to approve PENDING registrations from kiosk Path A
+5. Keep desktop testing on `localhost:5173` — unchanged
+
+**Next SDK work (capture / liveness — not started):**
+
+Implement **device profiles** so desktop behavior stays the same while Android kiosks get tuned settings:
+
+| File | Purpose |
+|------|---------|
+| `sdk/src/components/CameraOverlay.tsx` | Orchestrator — throttle detection loop on slow devices |
+| `sdk/src/liveness/BlinkDetector.ts` | Mobile/Android blink preset (looser EAR); MediaPipe delegate/confidence |
+| `sdk/src/camera/CameraManager.ts` | Lower resolution/fps for mobile/kiosk (e.g. 640×480 @ 24fps) |
+| `sdk/src/sdk/FaceAuthSDK.ts` | Expose `captureProfile: "desktop" \| "mobile" \| "android_kiosk"` |
+| `sdk/src/capture/deviceProfile.ts` (new, recommended) | Central profile detection + mapping |
+
+**Design rule:** profile-based tuning — do **not** replace global desktop defaults; desktop keeps current `KIOSK_LIGHT_BLINK` and default camera.
+
+**Do not jump to native Android camera yet** — browser SDK + profiles should be tried first. Native CameraX/Mendix widget is Plan B only if WebView pipeline still fails after profiling.
+
+**Production kiosk (later):** real HTTPS backend URL on device (not ngrok); optional `showFeedbackToast: false` in Mendix; threshold tuning from field score logs.
+
+### Known limitations (updated 2026-08-31)
+
+| Topic | Status |
+|-------|--------|
+| Desktop Chrome + USB webcam kiosk | **Works** — primary dev target |
+| Android box / mobile browser kiosk | **Partial** — HTTP/WebView fixed; blink/capture profile **pending** |
+| Admin Portal grant PLANT_ADMIN UI | API done (`POST /admin/users/grant`); SUPER_ADMIN UI **not built** |
+| Path B kiosk admin batch | Not built (`AGENTS.md`) |
+| SDK STATE 3 two-button overlay | Register works via `authenticateOrRegister`; explicit UI pending |
+| Mendix npm package publish | SDK code ready; packaging pending |
+
+### Next steps (current priority)
+
+1. **Retest Android kiosk** with `/api` ngrok setup + `FaceAuthClient` fix — confirm auth/register HTTP works
+2. **SDK capture profiles** for Android kiosk (files above) — blink + face smoothness
+3. SDK **Not Enrolled** two-button overlay (Register vs Admin Login)
+4. Admin Portal **grant PLANT_ADMIN** UI (SUPER_ADMIN only)
+5. Path B `/kiosk/admin-*` when batch enroll at kiosk is required
+6. Mendix SDK npm package handoff + client Debian backend deploy
 
 ## Technology Stack
 
