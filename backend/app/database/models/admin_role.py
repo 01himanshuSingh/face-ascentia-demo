@@ -11,17 +11,26 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 
 if TYPE_CHECKING:
+    from app.database.models.admin_role_permission import AdminRolePermission
     from app.database.models.employee import Employee
     from app.database.models.plant import Plant
 
 
 class AdminRole(Base):
-    """Maps an employee to an admin role and plant workspace (RBAC)."""
+    """
+    Maps an employee to an admin role and plant workspace (RBAC v1).
+
+    Active roles:
+      SUPER_ADMIN  — all plants; grants PLANT_ADMIN (bootstrap / IT only)
+      PLANT_ADMIN  — one plant; approve/reject registrations for that plant
+
+    SUB_ADMIN is reserved in schema for a future phase — not used in v1.
+    """
 
     __tablename__ = "admin_roles"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('PLANT_ADMIN', 'SUPER_ADMIN')",
+            "role IN ('SUPER_ADMIN', 'PLANT_ADMIN', 'SUB_ADMIN')",
             name="ck_admin_roles_role",
         ),
         Index("idx_admin_roles_plant_id", "plant_id"),
@@ -51,11 +60,21 @@ class AdminRole(Base):
         nullable=False,
         server_default="true",
     )
+    granted_by: Mapped[str | None] = mapped_column(
+        Text,
+        ForeignKey("employees.employee_id"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    employee: Mapped[Employee] = relationship()
+    employee: Mapped[Employee] = relationship(foreign_keys=[employee_id])
     plant: Mapped[Plant | None] = relationship()
+    granter: Mapped[Employee | None] = relationship(foreign_keys=[granted_by])
+    permissions: Mapped[list["AdminRolePermission"]] = relationship(
+        back_populates="admin_role",
+        cascade="all, delete-orphan",
+    )

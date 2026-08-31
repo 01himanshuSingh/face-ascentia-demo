@@ -7,7 +7,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.common.enums import AdminRoleType, AuditAction, RegistrationStatus
+from app.common.enums import AdminPermissionCode, AdminRoleType, AuditAction, RegistrationStatus
 from app.common.exceptions import AdminError, AuthError, RegistrationError
 from app.repositories import (
     audit_repository,
@@ -24,6 +24,7 @@ from app.schemas.admin import (
     RegistrationQueueResponse,
 )
 from app.services.admin_auth import AdminSession
+from app.services.admin_rbac import assert_can_manage_plant, assert_permission
 from app.services.face_verification import (
     FaceVerificationService,
     get_shared_face_verification_service,
@@ -51,6 +52,7 @@ class AdminReviewService:
         db: Session,
         session: AdminSession,
     ) -> RegistrationQueueResponse:
+        assert_permission(session, AdminPermissionCode.REGISTRATION_VIEW_PENDING)
         if session.role == AdminRoleType.SUPER_ADMIN.value:
             rows = registration_repository.list_pending_all(db)
         else:
@@ -87,6 +89,7 @@ class AdminReviewService:
         session: AdminSession,
         request_id: uuid.UUID,
     ) -> bytes:
+        assert_permission(session, AdminPermissionCode.REGISTRATION_VIEW_IMAGE)
         request = self._load_accessible_request(db, session, request_id)
         raw = raw_image_repository.get_by_request_id(db, request.request_id)
         if raw is None or not raw.image_data:
@@ -115,6 +118,7 @@ class AdminReviewService:
         *,
         reason: str | None = None,
     ) -> RegistrationDecisionResponse:
+        assert_permission(session, AdminPermissionCode.REGISTRATION_APPROVE)
         request = self._load_accessible_pending(db, session, request_id)
         raw = raw_image_repository.get_by_request_id(db, request.request_id)
         if raw is None or not raw.image_data:
@@ -206,6 +210,7 @@ class AdminReviewService:
         *,
         reason: str,
     ) -> RegistrationDecisionResponse:
+        assert_permission(session, AdminPermissionCode.REGISTRATION_REJECT)
         normalized_reason = (reason or "").strip()
         if not normalized_reason:
             raise AdminError(
@@ -257,7 +262,7 @@ class AdminReviewService:
                 code=AdminErrorCode.REQUEST_NOT_FOUND,
                 http_status=404,
             )
-        self._assert_plant_access(session, request.plant_id)
+        assert_can_manage_plant(session, request.plant_id)
         return request
 
     def _load_accessible_pending(
@@ -274,17 +279,6 @@ class AdminReviewService:
                 http_status=409,
             )
         return request
-
-    @staticmethod
-    def _assert_plant_access(session: AdminSession, plant_id: uuid.UUID) -> None:
-        if session.role == AdminRoleType.SUPER_ADMIN.value:
-            return
-        if session.plant_id != plant_id:
-            raise AdminError(
-                "Access denied for this plant.",
-                code=AdminErrorCode.PLANT_ACCESS_DENIED,
-                http_status=403,
-            )
 
 
 def get_shared_admin_review_service() -> AdminReviewService:

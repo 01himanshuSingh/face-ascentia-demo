@@ -18,6 +18,8 @@ class AdminErrorCode(StrEnum):
     REQUEST_NOT_FOUND = "REQUEST_NOT_FOUND"
     REQUEST_NOT_PENDING = "REQUEST_NOT_PENDING"
     PLANT_ACCESS_DENIED = "PLANT_ACCESS_DENIED"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+    EMPLOYEE_NOT_FOUND = "EMPLOYEE_NOT_FOUND"
     MISSING_DECISION_REASON = "MISSING_DECISION_REASON"
 
 
@@ -63,6 +65,24 @@ class RegistrationQueueResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
 
     items: list[RegistrationQueueItem]
+
+
+class AdminGrantRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    employee_id: str = Field(..., validation_alias="employeeId")
+    role: str = Field(..., description="PLANT_ADMIN or SUB_ADMIN")
+    plant_id: UUID | None = Field(default=None, validation_alias="plantId")
+    password: str
+
+
+class AdminGrantResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
+
+    employee_id: str = Field(..., serialization_alias="employeeId")
+    role: str
+    plant_id: UUID | None = Field(default=None, serialization_alias="plantId")
+    message: str
 
 
 class RegistrationDecisionRequest(BaseModel):

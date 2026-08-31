@@ -11,6 +11,20 @@ import type { CameraStartOptions } from "../camera/camera.types";
 import { CameraOverlay } from "../components/CameraOverlay";
 import { RegisterOverlay } from "../components/RegisterOverlay";
 import {
+  feedbackFromApiError,
+  feedbackFromAuthenticateResult,
+  feedbackFromCaptureFailure,
+  feedbackFromRegisterResult,
+  feedbackFromUnknownError,
+  feedbackRegistrationCancelled,
+} from "../ui/feedbackToastMappers";
+import {
+  dismissSdkFeedbackToast,
+  destroySdkFeedbackToastHost,
+  showSdkFeedbackToast,
+} from "../ui/showSdkFeedbackToast";
+import type { SdkFeedbackPayload } from "../ui/feedbackToast.types";
+import {
   AuthErrorCode,
   type CapturePhase,
   type FaceCaptureFailure,
@@ -47,6 +61,15 @@ export interface FaceAuthSDKConfig {
   mountNode?: HTMLElement;
   onCameraClose?: () => void;
   onPhaseChange?: (phase: CapturePhase) => void;
+
+  /**
+   * Operator feedback toast (scores, thresholds, capture/API errors).
+   * Mendix page stays minimal — SDK shows details here. Default true.
+   */
+  showFeedbackToast?: boolean;
+
+  /** Auto-dismiss for feedback toast. Default 5500ms. Set 0 to require manual dismiss. */
+  feedbackToastDurationMs?: number;
 }
 
 export interface FaceAuthSDKCameraSession {
@@ -153,6 +176,8 @@ export class FaceAuthSDK {
         image: frame,
       });
 
+      this.showFeedback(feedbackFromAuthenticateResult(apiResult));
+
       if (apiResult.authenticated) {
         this.clearCaptureSession();
       }
@@ -163,8 +188,10 @@ export class FaceAuthSDK {
       };
     } catch (error) {
       if (isFaceAuthApiError(error) && this.isRegisterEligibleAuthError(error.code)) {
+        this.showFeedback(feedbackFromApiError(error));
         throw error;
       }
+      this.showFeedback(feedbackFromUnknownError(error));
       this.clearCaptureSession();
       throw error;
     }
@@ -204,16 +231,26 @@ export class FaceAuthSDK {
       );
     }
 
-    const result = await this.getAuthClient().register({
-      employeeId: normalizedId,
-      plantId,
-      fullName,
-      image: frame,
-      sessionId: this.lastSessionId ?? undefined,
-    });
+    try {
+      const result = await this.getAuthClient().register({
+        employeeId: normalizedId,
+        plantId,
+        fullName,
+        image: frame,
+        sessionId: this.lastSessionId ?? undefined,
+      });
 
-    this.clearCaptureSession();
-    return result;
+      this.showFeedback(feedbackFromRegisterResult(result));
+      this.clearCaptureSession();
+      return result;
+    } catch (error) {
+      this.showFeedback(
+        isFaceAuthApiError(error)
+          ? feedbackFromApiError(error)
+          : feedbackFromUnknownError(error),
+      );
+      throw error;
+    }
   }
 
   /**
@@ -334,6 +371,7 @@ export class FaceAuthSDK {
   }
 
   async destroy(): Promise<void> {
+    dismissSdkFeedbackToast();
     this.rejectCapture(
       Object.assign(new Error("SDK destroyed."), { code: "CANCELLED" }),
     );
@@ -357,6 +395,16 @@ export class FaceAuthSDK {
 
     this.hostNode = null;
     this.ownedHost = false;
+    destroySdkFeedbackToastHost();
+  }
+
+  private showFeedback(payload: SdkFeedbackPayload): void {
+    if (this.config.showFeedbackToast === false) {
+      return;
+    }
+    showSdkFeedbackToast(payload, {
+      durationMs: this.config.feedbackToastDurationMs,
+    });
   }
 
   private storeCaptureSession(frame: FaceCaptureResult): void {
@@ -424,6 +472,7 @@ export class FaceAuthSDK {
   }
 
   private finishCaptureFailure(failure: FaceCaptureFailure): void {
+    this.showFeedback(feedbackFromCaptureFailure(failure));
     const waiters = this.captureWaiters;
     this.captureWaiters = null;
     this.pipelineEnabled = false;
@@ -437,6 +486,14 @@ export class FaceAuthSDK {
   }
 
   private rejectCapture(error: Error): void {
+    const code = (error as Error & { code?: string }).code;
+    if (code === "CANCELLED") {
+      this.showFeedback(feedbackFromCaptureFailure({
+        code: "CANCELLED",
+        message: error.message,
+        phase: "cancelled",
+      }));
+    }
     const waiters = this.captureWaiters;
     this.captureWaiters = null;
     this.pipelineEnabled = false;
@@ -462,6 +519,12 @@ export class FaceAuthSDK {
   }
 
   private handleRegisterCancel(): void {
+    // Mendix only shows Employee ID + Authenticate — discard auth JPEG so the
+    // next tap must run camera again (no silent reuse of a cancelled capture).
+    this.clearCaptureSession();
+    this.cameraOpen = false;
+    this.pipelineEnabled = false;
+    this.showFeedback(feedbackRegistrationCancelled());
     this.rejectRegisterFlow(
       Object.assign(new Error("Registration cancelled."), { code: "CANCELLED" }),
     );

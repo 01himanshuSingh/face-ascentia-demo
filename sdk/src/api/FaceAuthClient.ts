@@ -56,6 +56,35 @@ import {
   isRegistrationErrorBody,
 } from "../types/registration.types";
 
+/**
+ * Fetch with timeout via AbortController — do not use AbortSignal.timeout();
+ * many Android kiosk WebViews lack it or expose a broken polyfill.
+ */
+async function fetchWithTimeout(
+  fetchFn: typeof fetch,
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchFn(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function networkErrorDetail(error: unknown, timeoutMs: number): string {
+  if (error instanceof Error) {
+    if (error.name === "AbortError") {
+      return `Request timed out after ${Math.round(timeoutMs / 1000)}s.`;
+    }
+    return error.message;
+  }
+  return "Network request failed.";
+}
+
 /** Client-only failure codes (not returned by Debian API). */
 export type FaceAuthClientErrorCode =
   | AuthErrorCode
@@ -192,13 +221,14 @@ export class FaceAuthClient {
   async listPlants(): Promise<PlantListResponse> {
     let response: Response;
     try {
-      response = await this.fetchFn(this.plantsUrl, {
-        method: "GET",
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      response = await fetchWithTimeout(
+        this.fetchFn,
+        this.plantsUrl,
+        { method: "GET" },
+        this.timeoutMs,
+      );
     } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "Network request failed.";
+      const detail = networkErrorDetail(error, this.timeoutMs);
       throw new FaceAuthApiError(detail, {
         httpStatus: 0,
         code: "NETWORK_ERROR",
@@ -287,14 +317,14 @@ export class FaceAuthClient {
 
   private async postMultipart(url: string, form: FormData): Promise<Response> {
     try {
-      return await this.fetchFn(url, {
-        method: "POST",
-        body: form,
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      return await fetchWithTimeout(
+        this.fetchFn,
+        url,
+        { method: "POST", body: form },
+        this.timeoutMs,
+      );
     } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "Network request failed.";
+      const detail = networkErrorDetail(error, this.timeoutMs);
       throw new FaceAuthApiError(detail, {
         httpStatus: 0,
         code: "NETWORK_ERROR",

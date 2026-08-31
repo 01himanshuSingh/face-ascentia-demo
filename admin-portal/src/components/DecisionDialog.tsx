@@ -1,0 +1,90 @@
+import { useState, type FormEvent } from "react";
+import clsx from "clsx";
+
+export type DecisionDialogProps = {
+  mode: "approve" | "reject";
+  employeeId: string;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (reason?: string) => Promise<void>;
+};
+
+export function DecisionDialog({
+  mode,
+  employeeId,
+  busy,
+  onCancel,
+  onConfirm,
+}: DecisionDialogProps) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const isApprove = mode === "approve";
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!isApprove && !reason.trim()) {
+      setError("Reject reason is required.");
+      return;
+    }
+    setError(null);
+    void onConfirm(reason.trim() || undefined);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4 backdrop-blur-[2px]">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+      >
+        <h3 className="text-lg font-semibold text-slate-900">
+          {isApprove ? "Approve enrollment" : "Reject registration"}
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+          {isApprove
+            ? `Approve ${employeeId} and create an ACTIVE enrollment?`
+            : `Reject registration for ${employeeId}. A reason is required.`}
+        </p>
+
+        <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-slate-700">
+          {isApprove ? "Note (optional)" : "Reason"}
+          <textarea
+            className="min-h-24 resize-y rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 disabled:bg-slate-50"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            rows={3}
+            disabled={busy}
+          />
+        </label>
+
+        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+
+        <div className="mt-5 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className={clsx(
+              "rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60",
+              isApprove
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-red-600 hover:bg-red-700",
+            )}
+          >
+            {busy
+              ? "Saving…"
+              : isApprove
+                ? "Confirm approve"
+                : "Confirm reject"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

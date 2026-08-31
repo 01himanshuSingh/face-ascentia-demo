@@ -1,157 +1,337 @@
-# Face Authentication System — Architecture Update
-## New Module: Admin Kiosk Batch Enrollment
+# Face Authentication System — Agent Context
 
-> **Purpose of this file**: This is a project context file for Cursor (or any dev reading the repo) to understand the NEW addition to the existing architecture. Read this before touching SDK state-machine code or backend kiosk routes. Do not code yet — understand the intent first, exactly as the rest of this project's docs are structured.
+> **Purpose of this file**: Project context for Cursor (or any dev) before touching SDK state-machine code, registration flows, admin routes, or Admin Portal. Read this together with `PROJECT_CONTEXT.md` and `docs/architecture/registration-flow.md`.
+
+Last updated: 2026-08-31
 
 ---
 
-## 1. What Already Exists (Unchanged — Do Not Modify)
+## 1. What Stays Fixed (Do Not Redesign)
 
-The full end-to-end flow, free tech stack, plant-based workspace/RBAC, metadata/image storage split, duplicate prevention, 25K scalability design, and component ownership are ALL already finalized and documented in `docs/architecture/system-architecture.md`. This update does not change any of that — it ADDS one new capability on top of it.
-
-Recap of what stays exactly the same:
-- Mendix Web only ever shows: Employee ID field + Authenticate button. This NEVER changes, even with this update.
-- SDK owns camera, liveness, capture, session handling.
+- Mendix Web only ever shows: **Employee ID + Authenticate**. This never changes.
+- SDK owns camera, liveness, capture, Register overlay, session handling.
 - Backend (FastAPI + PostgreSQL/pgvector) owns matching, enrollment state, duplicate blocking, plant-scoped access, audit logging.
-- Admin Portal (separate web app) still owns Accept/Reject review workflow, Employee history, Admin-Initiated Registration (one employee at a time, from a desk).
-- Free stack (MediaPipe, OpenCV SFace, ONNX Runtime, pgvector) unchanged.
+- Free stack unchanged: MediaPipe, OpenCV SFace, ONNX Runtime, pgvector.
+- Plant workspace boundary: **`plant_id`** on all relevant rows; admin queues filtered by plant.
+
+Full architecture: `docs/architecture/system-architecture.md`.
 
 ---
 
-## 2. What's NEW: Admin Kiosk Batch Enrollment
+## 2. One Person, Three Tables (Admin Is an Employee Too)
 
-### The Problem This Solves
-Plant admins need to enroll multiple employees (e.g., a new joiner batch of 10) directly at the physical kiosk, without each employee going through the PENDING → separate admin review cycle. The admin is physically present verifying identity in real time, so this path skips the async review step — but is still fully auditable.
+Every person — worker or admin — uses **one business `employee_id`**. Capabilities are layered; do not merge into one table.
 
-### Why This Is Different From Existing Admin-Initiated Registration
-The existing "Admin-Initiated Registration" module lives in the Admin Portal (a desk-based web app, one employee registered at a time, still creates a request that could be reviewed). This NEW module is:
-- Triggered directly from the KIOSK (not the Admin Portal)
-- Session-based, batch-oriented (many employees enrolled in one continuous admin session)
-- Auto-approved at the point of capture (no separate review step) — because the admin IS the reviewer, standing right there
+| Table | Purpose | Used for |
+|-------|---------|----------|
+| `employees` | Identity: who, which plant, ACTIVE/INACTIVE | All flows |
+| `enrollments` | Face embedding (ACTIVE) | **`POST /authenticate`** (kiosk face login) |
+| `admin_roles` | Password + `PLANT_ADMIN` / `SUPER_ADMIN` | **Admin Portal** + kiosk admin login (Path B) |
 
-These are two distinct features. Do not merge them into one code path — keep `AdminPortalInitiatedRegistration` and `AdminKioskBatchEnrollment` as separate services/endpoints, since their trust models differ (Portal = admin recalls a photo already taken by SDK earlier; Kiosk Batch = admin actively present for a fresh live capture, right now, repeatedly).
+**Rules:**
+
+- `POST /authenticate` reads **`employees` + `enrollments` only** — never `admin_roles`.
+- Admin login reads **`admin_roles` only** — password, not face.
+- Same person can have both `enrollments` and `admin_roles` on the same `employee_id`.
+- `admin_roles.employee_id` FK → `employees` — admin must exist as employee first (recommended: enrolled worker first).
+
+### Admin who also face-logs in (daily work)
+
+```text
+Morning — Admin Portal
+  ADMIN001 + password → approve/reject queue → log out
+
+Later — Kiosk / Mendix
+  ADMIN001 + Authenticate (face) → employee daily work
+```
+
+Both use the **same Employee ID**; different credentials (password vs face).
+
+### Recommended admin provisioning (worker first)
+
+```text
+Step 1 — Enroll as worker
+  Path A (register → approve) OR Path B batch enroll OR dev enroll script
+  → employees + enrollments (face login works)
+
+Step 2 — Grant plant admin (desk)
+  SUPER_ADMIN: search employee_id → assign PLANT_ADMIN (plant) → set password
+  → admin_roles row (portal login for that plant)
+
+Step 3 — Complete person
+  employees + enrollments + admin_roles (same employee_id)
+```
+
+**v1 roles:** `SUPER_ADMIN` + `PLANT_ADMIN` only. **SUB_ADMIN deferred.**
+
+**Not built yet:** Admin Portal UI for Step 2. **API:** `POST /admin/users/grant` (PLANT_ADMIN only). Dev: `seed_super_admin.py` → `seed_admin.py`.
 
 ---
 
-## 3. SDK State Machine — Full Update
+## 2b. Admin RBAC v1 — Two Roles + Permission Table
 
-This state machine REPLACES the SDK's previous simpler "not enrolled → register" flow with this expanded version. Mendix itself never sees or needs to know about states 3-5 — they are entirely SDK-internal, rendered by the SDK on top of the container Mendix gives it.
+Scalable storage (`admin_permissions` + `admin_role_permissions`) with a **simple v1 policy**: two active roles, plant-scoped review.
+
+### Active roles (v1)
+
+| Role | `plant_id` | Can do |
+|------|------------|--------|
+| **SUPER_ADMIN** | `NULL` (all plants) | View/approve/reject **any** plant; **grant PLANT_ADMIN** |
+| **PLANT_ADMIN** | One plant UUID | View/approve/reject **own plant only** |
+
+**SUB_ADMIN** — reserved in DB enum for future; **not granted or used in v1.**
+
+### Who creates whom
+
+```text
+SUPER_ADMIN  ──grants──►  PLANT_ADMIN (per plant, via POST /admin/users/grant)
+PLANT_ADMIN  ──does──►    approve / reject PENDING for own plant only
+```
+
+### v1 permission defaults (copied to `admin_role_permissions` on grant)
+
+| Permission | SUPER_ADMIN | PLANT_ADMIN |
+|------------|:-----------:|:-----------:|
+| `REGISTRATION_VIEW_PENDING` | ✓ | ✓ |
+| `REGISTRATION_VIEW_IMAGE` | ✓ | ✓ |
+| `REGISTRATION_APPROVE` | ✓ | ✓ |
+| `REGISTRATION_REJECT` | ✓ | ✓ |
+| `ADMIN_GRANT_PLANT_ADMIN` | ✓ | ✗ |
+| `ADMIN_GRANT_SUB_ADMIN` | ✗ (catalog only, future) | ✗ |
+
+Plant scoping: `PLANT_ADMIN` queue + approve/reject enforced by `session.plant_id == request.plant_id`. `SUPER_ADMIN` bypasses plant filter.
+
+### Grant API (v1)
+
+```text
+POST /admin/users/grant
+  Body: { employeeId, role: "PLANT_ADMIN", plantId, password }
+  Caller: SUPER_ADMIN only (needs ADMIN_GRANT_PLANT_ADMIN)
+  Target: must exist in employees (worker-first recommended)
+```
+
+### Dev seed order (no worker pre-seed)
+
+```text
+1. alembic upgrade head
+2. seed_super_admin.py     → SUPER001 + DEV01 plant (bootstrap)
+3. seed_admin.py           → PLANT_ADMIN ADMIN001 for portal (DEV01 scope)
+
+Manual test flow:
+4. test-harness → register worker (Plant + Employee ID + name) → PENDING
+5. Admin Portal → PLANT_ADMIN sees queue for own plant → approve / reject
+6. Re-authenticate at kiosk → login succeeds after approve
+
+Do not run seed_employee_only.py for normal Path A testing — workers come from kiosk register.
+```
+
+**Alembic:** `20260831_0007` removes `ADMIN_GRANT_SUB_ADMIN` from existing plant admin rows.
+
+---
+
+## 3. Registration Paths (Do Not Merge)
+
+| Path | Who | Capture | Endpoint | Result |
+|------|-----|---------|----------|--------|
+| **A — Employee self-register** | Employee at kiosk | One capture at auth; **reuse** JPEG on register | `POST /register` | PENDING → Admin Portal approve |
+| **B — Admin kiosk batch** | Plant admin at kiosk | **Fresh capture per employee** after admin password login | `POST /kiosk/admin-enroll` | ACTIVE immediately |
+
+Trust models differ — keep separate services/endpoints.
+
+---
+
+## 4. Path A — Registration-First Hybrid (**Implemented**)
+
+HR keeps master data **offline** (paper / separate machine). Kiosk does **not** require a pre-loaded `employees` row at submit time.
+
+### Trigger (SDK opens Register UI)
+
+| Code | Meaning | Register? |
+|------|---------|-----------|
+| `ENROLLMENT_NOT_FOUND` | Known employee, no ACTIVE face enrollment | Yes |
+| `EMPLOYEE_NOT_FOUND` | Not in system yet | Yes |
+| `authenticated: false` (200) | Enrolled but wrong face | No |
+
+### Kiosk Register UI fields (SDK `RegisterOverlay`)
+
+| Field | Required |
+|-------|----------|
+| **Plant** | Yes — from `GET /plants` |
+| **Employee ID** | Yes |
+| **Full name** | Yes — HR offline matching |
+| **Face photo** | Yes — reused from authenticate capture (no second camera) |
+
+### Backend flow
+
+```text
+POST /register
+  → registration_requests (PENDING, plant_id from form, submitted_full_name)
+  → raw_images
+  → NO employees / enrollments yet
+
+Admin Portal approve
+  → employees + enrollments (ACTIVE)
+  → registration_requests APPROVED
+  → audit_log APPROVE
+```
+
+### Admin Portal API (backend done; React UI pending)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /admin/login` | Admin Employee ID + password |
+| `GET /admin/registrations/pending` | Plant-scoped queue |
+| `GET /admin/registrations/{id}/image` | Face photo for HR |
+| `POST /admin/registrations/{id}/approve` | Create employee + enrollment |
+| `POST /admin/registrations/{id}/reject` | Reject with reason |
+
+**Alembic note:** Migration `20260829_0005` dropped FK from `registration_requests.employee_id` → `employees` so intake works without pre-existing HR row.
+
+---
+
+## 5. SDK State Machine (Target + Current Status)
+
+Mendix never sees states 3–5 — SDK-internal only.
 
 ```
-STATE 1: IDLE (Mendix's normal screen — UNCHANGED)
-  → Employee ID + Authenticate button visible (Mendix-rendered)
-  → Employee types ID, taps Authenticate → SDK.authenticate() called
+STATE 1: IDLE (Mendix — UNCHANGED)
+  → Employee ID + Authenticate → SDK.authenticate()
 
 STATE 2: AUTH RESULT
-  → Match found → login success → back to STATE 1 (idle)
-  → No match found → SDK takes over screen → STATE 3
+  → Match → login success → STATE 1
+  → No match / not enrolled → STATE 3
 
-STATE 3: SDK OVERLAY — Not Enrolled (NEW: now has two buttons, was one)
-  → SDK renders its own UI (not Mendix's):
-       [Employee Register]   [Admin Login]
-  → Employee taps "Employee Register" → Path A: Mendix Register UI (Employee ID only);
-       SDK reuses the JPEG from the failed authenticate capture — NO second camera session
-  → Admin taps "Admin Login" → STATE 4 (NEW)
+STATE 3: NOT ENROLLED OVERLAY
+  → [Employee Register]  → Path A Register UI (Plant + ID + Full name; reuse auth JPEG)
+  → [Admin Login]          → STATE 4 (Path B — NOT BUILT YET)
 
-STATE 4: ADMIN AUTHENTICATING (NEW)
-  → SDK shows admin login fields (Employee ID + password) — SDK-rendered, not Mendix
-  → Calls POST /kiosk/admin-login
-  → On success → admin_session_token issued → STATE 5
-  → On failure → back to STATE 3
+STATE 4: ADMIN AUTHENTICATING (Path B — NOT BUILT)
+  → Admin's own Employee ID + password → POST /kiosk/admin-login → admin_session_token
 
-STATE 5: ADMIN ENROLLMENT LOOP (NEW — session active)
-  → SDK shows: "Enter Employee ID to Enroll" + Capture button
-  → Admin enters target employee ID, then captures face (FRESH capture every time —
-       do NOT reuse the JPEG from the earlier Mendix authenticate attempt)
-  → Calls POST /kiosk/admin-enroll (with admin_session_token)
-  → Backend enrolls directly as ACTIVE (bypasses PENDING state)
-  → Screen shows "✅ Enrolled" briefly → AUTOMATICALLY resets to same screen
-  → Repeats for employee #2, #3 ... #10 — NO re-login required, NO routing back
-    through Mendix's Authenticate button at all — SDK handles this loop entirely
-    internally, calling only /kiosk/admin-enroll repeatedly
-  → Admin taps "End Session" (persistent button, visible throughout STATE 5)
-    OR session times out from inactivity (recommended: 15-20 min, or shorter
-    idle-timeout e.g. 2 min between captures)
-       → calls POST /kiosk/admin-logout → session_token invalidated
-       → returns to STATE 1 (Mendix's normal idle screen)
+STATE 5: ADMIN ENROLLMENT LOOP (Path B — NOT BUILT)
+  → Target employee ID + FRESH face capture each time → POST /kiosk/admin-enroll
+  → ACTIVE immediately; repeat; End Session → POST /kiosk/admin-logout
 ```
 
-### Critical Implementation Rule
-Once in STATE 5, the loop between employees NEVER touches `SDK.authenticate()` (Mendix's entrypoint) again. It only calls the internal `enrollNextEmployee()` function repeatedly. This is what makes the batch loop fast — no re-authentication overhead per employee, only per admin session.
+### Implementation status
+
+| State / feature | Status |
+|-----------------|--------|
+| Authenticate + camera | Done |
+| Register overlay (Path A fields) | Done |
+| `authenticateOrRegister()` convenience | Done (opens register on ENROLLMENT_NOT_FOUND or EMPLOYEE_NOT_FOUND) |
+| STATE 3 two-button overlay (Register vs Admin Login) | **Pending** — register works without explicit two-button UI today |
+| STATE 4–5 Path B | **Not built** |
+
+### Critical Path B rule (when implemented)
+
+Once in STATE 5, the loop **never** calls `SDK.authenticate()` again — only internal `enrollNextEmployee()` → `/kiosk/admin-enroll` repeatedly.
+
+Path A register **reuses** auth JPEG. Path B admin enroll **never** reuses the failed auth JPEG — fresh capture per employee.
 
 ---
 
-## 4. New Backend Endpoints (Add to `backend/app/api/routes/`)
+## 6. Path B — Admin Kiosk Batch Enrollment (**Not Built**)
 
-Create a new route file: `backend/app/api/routes/kiosk_admin.py`
+### Problem
 
-### POST /kiosk/admin-login
-```
+Plant admins enroll many joiners at the physical kiosk without PENDING → async review. Admin is the live verifier → ACTIVE at capture.
+
+### New backend routes (add `backend/app/api/routes/kiosk_admin.py`)
+
+#### POST /kiosk/admin-login
+
+```text
 Body: { employee_id, password }
-Logic: Validate against existing admin_roles table (SAME credentials as Admin Portal login — do not create a separate admin credential system)
+Logic: Validate admin_roles (SAME credentials as Admin Portal — no separate admin credential system)
 Returns: { admin_session_token, plant_id, expires_at }
 ```
 
-### POST /kiosk/admin-enroll
-```
+Admin enters **their own** Employee ID + password (not the employee being enrolled).
+
+#### POST /kiosk/admin-enroll
+
+```text
 Headers: { admin_session_token }
 Body: { employee_id, captured_frame [, kiosk_id] }
-  kiosk_id — optional; omit in current rollout (same as POST /register); NULL in DB
+  kiosk_id — optional; omit in current rollout; NULL in DB
+
 Logic:
-  1. Validate admin_session_token is still valid (not expired, not logged out)
-  2. Run existing face pipeline: MediaPipe detect -> liveness check -> SFace embed
-  3. Check employee_id doesn't already have an ACTIVE enrollment (reuse existing duplicate-prevention logic)
-  4. Write registration_requests row:
-       source = 'ADMIN_KIOSK'   (NEW allowed value, alongside existing 'KIOSK', 'ADMIN_PORTAL')
-       status = 'APPROVED'       (written directly, NEVER 'PENDING' for this source)
-       reviewed_by = <admin's employee_id from session>
-       decision_reason = 'Kiosk batch enrollment'
-  5. Write raw_images row (same as existing pattern, linked by request_id)
-  6. Generate embedding, write to enrollments table as ACTIVE (reuse existing enrollment-write logic from the Accept path)
-  7. Write audit_log entry: action = 'ADMIN_KIOSK_ENROLL', actor = admin's employee_id, target = enrolled employee_id, plant_id
+  1. Validate admin_session_token (every call)
+  2. Face pipeline: detect → liveness → SFace embed
+  3. Guard: no duplicate ACTIVE enrollment / duplicate face in plant
+  4. registration_requests: source=ADMIN_KIOSK, status=APPROVED (never PENDING)
+  5. raw_images + enrollments ACTIVE
+  6. audit_log: ADMIN_KIOSK_ENROLL
 Returns: { success, employee_id, enrollment_status }
 ```
 
-### POST /kiosk/admin-logout
-```
+Admin enters **target employee's** ID + fresh face each time.
+
+#### POST /kiosk/admin-logout
+
+```text
 Headers: { admin_session_token }
-Logic: Invalidate the session_token immediately
-Returns: { success }
+Logic: Invalidate session immediately
 ```
 
----
+### Schema (already in DB)
 
-## 5. Schema Impact — No New Tables, Two Small Additions
+- `registration_requests.source` includes `'ADMIN_KIOSK'`
+- `AuditAction.ADMIN_KIOSK_ENROLL` in enums
 
-Update `backend/app/database/models/registration_request.py`:
-- Add `'ADMIN_KIOSK'` as a valid value in the `source` column's allowed values (alongside existing `'KIOSK'`, `'ADMIN_PORTAL'`)
-
-Update `backend/app/common/enums.py`:
-- Add `ADMIN_KIOSK_ENROLL` to the audit action enum (alongside existing `LOGIN`, `APPROVE`, `REJECT`, `VIEW_IMAGE`, `REVOKE`)
-
-No new tables. No changes to `enrollments`, `raw_images`, `audit_log`, `plants`, `employees`, or `admin_roles` structure — this feature reuses everything that already exists.
+No new tables required.
 
 ---
 
-## 6. Security Requirements (Non-Negotiable)
+## 7. Security (Non-Negotiable)
 
-- `admin_session_token` MUST have a server-side expiry (recommended: 15-20 min absolute, OR 2 min inactivity timeout between enrollments — whichever comes first)
-- Every single enrollment via this path MUST write a full audit_log entry — this bypasses the normal two-person review process, so the audit trail is what keeps it defensible, not optional
-- `/kiosk/admin-enroll` MUST re-validate the session token on EVERY call (not just at login) — do not trust a client-side "still logged in" flag
-- Consider (flag to client, not a code requirement yet): admin login at a shared kiosk device is a higher-risk credential-entry point than a private Admin Portal screen — recommend the client consider additional protection here (e.g., shorter timeout, or admin's own face+password) as a future hardening item
-
----
-
-## 7. What NOT to Build (Explicitly Out of Scope for This Update)
-
-- Do NOT change Mendix's UI — it still only ever shows Employee ID + Authenticate button, forever
-- Do NOT merge this with Admin-Initiated Registration (Admin Portal) — keep them as separate code paths
-- Do NOT create a new admin credential system — reuse existing `admin_roles` table and login logic
-- Do NOT create a PENDING state for admin-kiosk enrollments — they are always directly APPROVED, this is the entire point of this feature
-- Do NOT skip the audit_log write for any enrollment in this flow, even under time pressure
+- Kiosk admin `admin_session_token`: server-side expiry (15–20 min absolute or shorter inactivity between enrolls).
+- Path B: full `audit_log` on every `/kiosk/admin-enroll` — bypasses two-person review; audit is the control.
+- Re-validate session token on **every** `/kiosk/admin-enroll` call.
+- Path A: login blocked until approve; duplicate-face check at register **and** approve (plant-scoped pgvector).
+- UI is not the security boundary — backend query scoping by `plant_id` is.
 
 ---
 
-## 8. Summary for Cursor / Any Developer Reading This
+## 8. What NOT to Build
 
-You are adding ONE new capability to an already-complete architecture: **a session-based batch enrollment mode, triggered from the kiosk itself (not the Admin Portal), that lets a logged-in admin enroll many employees back-to-back without re-authenticating between each one.** It reuses the existing face-processing pipeline, existing admin credentials, existing database schema (with two small additive changes: a new `source` value and a new audit action type). Mendix's UI is completely unaffected. The SDK's internal state machine gains three new states (4, 5, and the two-button branch in state 3) on top of its existing simple flow.
+- Do NOT change Mendix UI (Employee ID + Authenticate only).
+- Do NOT merge Path A and Path B into one code path or one endpoint.
+- Do NOT create a separate admin credential system — reuse `admin_roles`.
+- Do NOT create PENDING for Path B admin-kiosk enrollments — always APPROVED at capture.
+- Do NOT skip audit_log on Path B enrollments.
+- Do NOT put face embeddings in `admin_roles` or passwords in `employees`.
+- Do NOT let self-register (Path A) grant admin role — admin provisioning is a separate desk action.
+
+---
+
+## 9. Implementation Checklist (Repo Status)
+
+| Area | Status |
+|------|--------|
+| `POST /authenticate` | Done |
+| `POST /register` (registration-first) | Done |
+| `GET /plants` | Done |
+| Admin approve/reject API | Done (permission-checked) |
+| Admin grant role API | Done (`POST /admin/users/grant`) |
+| Permission tables + SUB_ADMIN | Done (SUB_ADMIN deferred in v1 policy) |
+| `seed_super_admin.py` bootstrap | Done |
+| Admin Portal React UI | **Pending** |
+| Grant admin role UI (search emp → PLANT_ADMIN + password) | **Pending** (API: SUPER only, PLANT_ADMIN target) |
+| SDK STATE 3 two-button overlay | **Pending** |
+| Path B `/kiosk/admin-*` + SDK STATE 4–5 | **Not built** |
+| `session_id` on auth/register wire-up | Deferred |
+
+**Alembic head:** `20260831_0007`
+
+---
+
+## 10. Summary for Cursor / Any Developer
+
+1. **Path A (built):** Registration-first kiosk intake — Plant + ID + Name + face → PENDING → plant admin approves against offline HR → `employees` + `enrollments` created.
+2. **Admin as employee:** One `employee_id`; face login = `enrollments`; desk/kiosk admin = `admin_roles` password. Provision worker first, grant admin second.
+3. **Path B (planned):** Kiosk admin password session → batch fresh captures → ACTIVE immediately — separate from Path A; read sections 5–6 before implementing.
+4. **Mendix unchanged.** SDK owns all overlay UI. Backend owns all DB and decisions.
+
+When in doubt, read `docs/architecture/registration-flow.md` and `PROJECT_CONTEXT.md` (section **Work completed 2026-08-29**).

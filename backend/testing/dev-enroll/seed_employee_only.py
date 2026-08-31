@@ -2,8 +2,8 @@
 """
 Dev tool — create an ACTIVE employee row with NO face enrollment.
 
-Use this to test Path A self-register:
-  authenticate → ENROLLMENT_NOT_FOUND → SDK Register overlay → POST /register
+Optional / legacy: registration-first flow does NOT require pre-seeded employees.
+Use test-harness register instead, then approve in Admin Portal.
 
 Usage (from backend/ with venv active):
 

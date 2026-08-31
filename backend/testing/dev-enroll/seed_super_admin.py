@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """
-Dev tool — seed a PLANT_ADMIN for Admin Portal review testing.
+Dev bootstrap — first SUPER_ADMIN (IT root account).
 
-Creates DEV01 plant if missing. Does NOT seed workers — register manually via
-test-harness, then approve/reject PENDING requests in the Admin Portal.
-
-Typical dev setup (after alembic upgrade head):
-
-  python testing/dev-enroll/seed_super_admin.py
-  python testing/dev-enroll/seed_admin.py
+SUPER_ADMIN cannot be created via POST /admin/users/grant.
+Run once per environment after alembic upgrade head.
 
 Usage (from backend/ with venv active):
 
-  python testing/dev-enroll/seed_admin.py \\
-    --employee-id ADMIN001 \\
-    --password changeme \\
-    --plant-code DEV01
+  python testing/dev-enroll/seed_super_admin.py \\
+    --employee-id SUPER001 \\
+    --password changeme
+
+Creates DEV01 plant if missing. Run seed_admin.py next for PLANT_ADMIN testing.
+Workers are registered manually via test-harness (not seeded here).
 """
 
 from __future__ import annotations
@@ -41,26 +38,25 @@ from app.services.admin_rbac import assign_default_permissions
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Seed plant admin credentials.")
-    parser.add_argument("--employee-id", default="ADMIN001")
-    parser.add_argument("--full-name", default="Plant Admin")
+    parser = argparse.ArgumentParser(description="Seed SUPER_ADMIN bootstrap account.")
+    parser.add_argument("--employee-id", default="SUPER001")
+    parser.add_argument("--full-name", default="Super Admin")
     parser.add_argument("--password", default="changeme")
-    parser.add_argument("--plant-code", default="DEV01")
     parser.add_argument(
-        "--plant-name",
-        default="Development Plant",
-        help="Plant name when creating a new plant row.",
+        "--plant-code",
+        default="DEV01",
+        help="Plant for employees row if created (super admin plant_id stays NULL).",
     )
     return parser.parse_args()
 
 
-def get_or_create_plant(db, *, plant_code: str, plant_name: str) -> Plant:
+def get_or_create_plant(db, *, plant_code: str) -> Plant:
     plant = db.scalars(
         select(Plant).where(Plant.plant_code == plant_code).limit(1)
     ).first()
     if plant is not None:
         return plant
-    plant = Plant(plant_name=plant_name, plant_code=plant_code, is_active=True)
+    plant = Plant(plant_name="Development Plant", plant_code=plant_code, is_active=True)
     db.add(plant)
     db.flush()
     return plant
@@ -70,11 +66,7 @@ def main() -> int:
     args = parse_args()
     db = SessionLocal()
     try:
-        plant = get_or_create_plant(
-            db,
-            plant_code=args.plant_code.strip(),
-            plant_name=args.plant_name.strip(),
-        )
+        plant = get_or_create_plant(db, plant_code=args.plant_code.strip())
 
         employee = db.get(Employee, args.employee_id.strip())
         if employee is None:
@@ -87,7 +79,6 @@ def main() -> int:
             db.add(employee)
             db.flush()
         else:
-            employee.plant_id = plant.plant_id
             employee.full_name = args.full_name.strip()
             employee.status = EmployeeStatus.ACTIVE.value
 
@@ -95,33 +86,33 @@ def main() -> int:
             select(AdminRole).where(AdminRole.employee_id == employee.employee_id).limit(1)
         ).first()
         password_hash = AdminAuthService.hash_password(args.password)
+
         if admin is None:
             admin = AdminRole(
                 employee_id=employee.employee_id,
-                plant_id=plant.plant_id,
-                role=AdminRoleType.PLANT_ADMIN.value,
+                plant_id=None,
+                role=AdminRoleType.SUPER_ADMIN.value,
                 password_hash=password_hash,
                 is_active=True,
+                granted_by=None,
             )
             db.add(admin)
         else:
-            admin.plant_id = plant.plant_id
-            admin.role = AdminRoleType.PLANT_ADMIN.value
+            admin.plant_id = None
+            admin.role = AdminRoleType.SUPER_ADMIN.value
             admin.password_hash = password_hash
             admin.is_active = True
             admin_role_repository.clear_permissions(db, admin.role_id)
 
         db.flush()
         db.refresh(admin)
-        assign_default_permissions(db, role_id=admin.role_id, role=AdminRoleType.PLANT_ADMIN)
+        assign_default_permissions(db, role_id=admin.role_id, role=AdminRoleType.SUPER_ADMIN)
 
         db.commit()
-        print("Plant admin seeded:")
+        print("SUPER_ADMIN seeded:")
         print(f"  employee_id={employee.employee_id}")
-        print(f"  plant_code={plant.plant_code}")
         print(f"  password={args.password}")
-        print("\nNext: test-harness → register a worker for this plant.")
-        print("Then Admin Portal login → approve/reject PENDING for this plant only.")
+        print("\nUse Admin Portal to grant PLANT_ADMIN per plant via POST /admin/users/grant.")
         return 0
     except Exception:
         db.rollback()

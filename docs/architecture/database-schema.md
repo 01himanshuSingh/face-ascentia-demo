@@ -227,23 +227,46 @@ CREATE INDEX idx_reqs_plant_status
 
 **Table:** `admin_roles`
 
-**Purpose:** Maps an employee to an admin role and a specific plant workspace — drives all RBAC scoping.
+**Purpose:** Maps an employee to an admin role, plant workspace, and password. Permissions are in **`admin_role_permissions`**.
 
 | Column | Type | Constraint / Note |
 |--------|------|-------------------|
-| `role_id` | UUID | PRIMARY KEY, default `gen_random_uuid()` |
+| `role_id` | UUID | PRIMARY KEY |
 | `employee_id` | TEXT | FK → `employees(employee_id)`, NOT NULL, UNIQUE |
-| `plant_id` | UUID | FK → `plants(plant_id)`, nullable if role = `'SUPER_ADMIN'` |
-| `role` | TEXT | CHECK IN (`'PLANT_ADMIN'`, `'SUPER_ADMIN'`) |
+| `plant_id` | UUID | FK → `plants(plant_id)`, nullable if `SUPER_ADMIN` |
+| `role` | TEXT | CHECK IN (`'SUPER_ADMIN'`, `'PLANT_ADMIN'`, `'SUB_ADMIN'`) |
 | `password_hash` | TEXT | NOT NULL |
 | `is_active` | BOOLEAN | DEFAULT `true` |
+| `granted_by` | TEXT | FK → `employees(employee_id)`, nullable — who granted this admin row |
 | `created_at` | TIMESTAMPTZ | DEFAULT `now()` |
 
 ### Notes
 
-- `PLANT_ADMIN` is associated with a specific plant.
-- `SUPER_ADMIN` may have `plant_id = NULL` and can operate across plants if the application requires this role.
-- RBAC enforcement will be implemented at the application layer in a later phase, while the database stores the role/workspace relationship.
+- **SUPER_ADMIN** — `plant_id` NULL; all plants; grants `PLANT_ADMIN` only (v1).
+- **PLANT_ADMIN** — one plant; approve/reject registrations for **that plant only**.
+- **SUB_ADMIN** — schema reserved; **not used in v1** (future sub-delegation).
+- Worker-first: grant admin only after `employees` row exists (ideally with enrollment).
+
+---
+
+## 8b. admin_permissions + admin_role_permissions
+
+**Tables:** permission catalog + junction (scalable; v1 uses fixed defaults per role).
+
+| `admin_permissions` | |
+|---------------------|---|
+| `permission_code` | TEXT PK |
+| `description` | TEXT |
+
+| `admin_role_permissions` | |
+|--------------------------|---|
+| `role_id` | FK → `admin_roles(role_id)` |
+| `permission_code` | FK → `admin_permissions(permission_code)` |
+
+**v1 active permissions:** four `REGISTRATION_*` + `ADMIN_GRANT_PLANT_ADMIN` (super only).  
+`ADMIN_GRANT_SUB_ADMIN` stays in catalog for a future phase — not assigned in v1.
+
+Default set assigned per role when grant runs or bootstrap seed scripts run.
 
 ---
 

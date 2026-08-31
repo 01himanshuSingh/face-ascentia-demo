@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.schemas.admin import (
     AdminErrorResponse,
+    AdminGrantRequest,
+    AdminGrantResponse,
     AdminLoginRequest,
     AdminLoginResponse,
     RegistrationDecisionRequest,
@@ -18,6 +20,7 @@ from app.schemas.admin import (
     RegistrationQueueResponse,
 )
 from app.services.admin_auth import AdminSession, get_shared_admin_auth_service
+from app.services.admin_grant import get_shared_admin_grant_service
 from app.services.admin_review import get_shared_admin_review_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -43,6 +46,40 @@ def admin_login(
     return get_shared_admin_auth_service().login(
         db,
         employee_id=body.employee_id,
+        password=body.password,
+    )
+
+
+@router.post(
+    "/users/grant",
+    response_model=AdminGrantResponse,
+    responses={403: {"model": AdminErrorResponse}, 404: {"model": AdminErrorResponse}},
+)
+def grant_admin_role(
+    body: AdminGrantRequest,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(get_admin_session),
+) -> AdminGrantResponse:
+    from app.common.enums import AdminRoleType
+
+    try:
+        role = AdminRoleType(body.role.strip().upper())
+    except ValueError as exc:
+        from app.common.exceptions import AdminError
+        from app.schemas.admin import AdminErrorCode
+
+        raise AdminError(
+            f"Invalid role: {body.role}",
+            code=AdminErrorCode.PERMISSION_DENIED,
+            http_status=400,
+        ) from exc
+
+    return get_shared_admin_grant_service().grant_role(
+        db,
+        session,
+        employee_id=body.employee_id,
+        role=role,
+        plant_id=body.plant_id,
         password=body.password,
     )
 

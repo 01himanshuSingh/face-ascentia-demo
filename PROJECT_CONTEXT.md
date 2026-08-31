@@ -351,8 +351,9 @@ Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
 
 | Script | Purpose |
 |--------|---------|
-| `backend/testing/dev-enroll/seed_employee_only.py` | Optional: seed employee without enrollment (legacy pre-data testing) |
-| `backend/testing/dev-enroll/seed_admin.py` | Seed `PLANT_ADMIN` for Admin Portal API testing (`ADMIN001` / `changeme`) |
+| `backend/testing/dev-enroll/seed_super_admin.py` | Bootstrap `SUPER_ADMIN` + `DEV01` plant (`SUPER001` / `changeme`) |
+| `backend/testing/dev-enroll/seed_admin.py` | Seed `PLANT_ADMIN` for portal (`ADMIN001` / `changeme`, DEV01 scope) |
+| `backend/testing/dev-enroll/seed_employee_only.py` | Optional legacy — not needed for registration-first Path A |
 
 ### Docs updated today
 
@@ -364,12 +365,13 @@ Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
 
 ```text
 1. docker compose up -d && alembic upgrade head
-2. python testing/dev-enroll/seed_admin.py   # optional: admin for approve step
-3. uvicorn app.main:app --reload --port 8000
-4. cd test-harness && npm run dev
-5. Authenticate with any new Employee ID → Register UI → select Plant, enter name → Submit → PENDING
-6. Admin: POST /admin/login → GET /admin/registrations/pending → approve
-7. Re-authenticate → login succeeds
+2. python testing/dev-enroll/seed_super_admin.py
+3. python testing/dev-enroll/seed_admin.py
+4. uvicorn app.main:app --reload --port 8000
+5. cd test-harness && npm run dev
+6. Authenticate with any new Employee ID → Register UI → select DEV01, enter name → Submit → PENDING
+7. Admin Portal (ADMIN001): pending queue for DEV01 only → approve or reject
+8. Re-authenticate → login succeeds after approve
 ```
 
 ### Still not built (Path A / B gaps)

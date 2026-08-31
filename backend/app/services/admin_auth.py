@@ -21,7 +21,9 @@ class AdminSession:
     token: str
     employee_id: str
     role: str
+    role_id: uuid.UUID
     plant_id: uuid.UUID | None
+    permissions: frozenset[str]
     expires_at: datetime
 
 
@@ -54,13 +56,16 @@ class AdminAuthService:
                 http_status=401,
             )
 
+        permission_codes = admin_role_repository.list_permission_codes(db, admin.role_id)
         expires_at = datetime.now(timezone.utc) + self._SESSION_TTL
         token = secrets.token_urlsafe(32)
         session = AdminSession(
             token=token,
             employee_id=admin.employee_id,
             role=admin.role,
+            role_id=admin.role_id,
             plant_id=admin.plant_id,
+            permissions=frozenset(permission_codes),
             expires_at=expires_at,
         )
         self._sessions[token] = session

@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #ecfdf8;
+  --color-brand-100: #d1faf0;
+  --color-brand-600: #0f766e;
+  --color-brand-700: #0f5f5a;
+  --color-brand-800: #115e59;
+  --color-surface: #f1f5f9;
+  --color-ink: #0f172a;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply m-0 bg-surface font-sans text-ink antialiased;
+  }
+}
