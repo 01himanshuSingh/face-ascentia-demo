@@ -101,7 +101,7 @@ The Mendix team does not receive the backend source code.
 If the employee is not face-enrolled (or not in the system yet), the SDK opens **Register UI** (Path A):
 
 - **[Employee Register] (Path A — registration-first hybrid)** — SDK overlay: **Plant + Employee ID + Full name**. SDK **reuses the JPEG from authenticate** → `POST /register` (PENDING). **No pre-existing HR row required** — employee + enrollment created only when plant admin **approves** in Admin Portal (HR compares against offline backup).
-- **[Admin Login] (Path B)** — Admin enters ID + password at kiosk, then **fresh face capture + Employee ID per employee** → `POST /kiosk/admin-enroll` (ACTIVE immediately). **Not built yet** — see `AGENTS.md`.
+- **[Admin Login] (Path B)** — Admin enters ID + password at kiosk, then **fresh face capture + Employee ID per employee** → `POST /kiosk/admin-enroll` (ACTIVE immediately). **Built 2026-09-01** — see SDK STATE 4–5 and `AGENTS.md`.
 
 See `docs/architecture/registration-flow.md` and `AGENTS.md`.
 
@@ -119,8 +119,12 @@ Mendix page
     +-- Face Auth SDK
           |
           +-- CameraOverlay
-          |
-          +-- RegisterOverlay (Plant + Employee ID + Full name)
+          +-- NotEnrolledChoiceOverlay (STATE 3 — Register vs Admin Login)
+          +-- RegisterOverlay (Path A — Plant + Employee ID + Full name)
+          +-- AdminKioskLoginOverlay (Path B — STATE 4)
+          +-- AdminEnrollLoopOverlay (Path B — STATE 5 batch enroll)
+          +-- EnrollmentFacePreviewOverlay (brief post-capture preview, enrollment only)
+          +-- AuthScoreToast (operator feedback)
 ```
 
 Only the backend requires separate server hosting.
@@ -286,7 +290,7 @@ Observed genuine-match score example: **~0.485** (photo enroll vs live webcam) �
 | Desktop Chrome + USB webcam kiosk | **Target platform** — works in testing |
 | Mendix npm package publish | SDK code ready; packaging/deploy to Mendix pending |
 | Threshold tuning per plant | Starting value 0.463; tune after field score logs |
-| Admin kiosk batch (Path B) | Documented in `AGENTS.md`; **not implemented** |
+| Admin kiosk batch (Path B) | **Done (2026-09-01)** — see 2026-09-01 section |
 
 ### Android kiosk — SDK changes still needed (not implemented)
 
@@ -378,14 +382,14 @@ Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
 8. Re-authenticate → login succeeds after approve
 ```
 
-### Still not built (Path A / B gaps — partial update 2026-08-31)
+### Still not built (Path A / B gaps — superseded by 2026-09-01 for Path B + STATE 3)
 
 | Area | Status |
 |------|--------|
 | Admin Portal React UI | **Done** — see 2026-08-31 section |
 | Admin Portal grant PLANT_ADMIN UI | API done; SUPER_ADMIN UI pending |
-| SDK Not Enrolled two-button overlay (Register vs Admin Login) | Register path works via `authenticateOrRegister`; explicit STATE 3 UI pending |
-| Path B — `/kiosk/admin-login`, `/kiosk/admin-enroll`, `/kiosk/admin-logout` | Not built (`AGENTS.md`) |
+| SDK Not Enrolled two-button overlay | **Done (2026-09-01)** |
+| Path B — `/kiosk/admin-login`, `/kiosk/admin-enroll`, `/kiosk/admin-logout` | **Done (2026-09-01)** |
 | Android kiosk capture profile (camera + blink) | Not built — field testing blocked blink smoothness |
 | `session_id` on authenticate/register | Optional column; SDK generates UUID but full auth contract wiring deferred |
 
@@ -495,25 +499,176 @@ Implement **device profiles** so desktop behavior stays the same while Android k
 
 **Production kiosk (later):** real HTTPS backend URL on device (not ngrok); optional `showFeedbackToast: false` in Mendix; threshold tuning from field score logs.
 
-### Known limitations (updated 2026-08-31)
+### Known limitations (updated 2026-08-31 — Path B / STATE 3 completed 2026-09-01)
 
 | Topic | Status |
 |-------|--------|
 | Desktop Chrome + USB webcam kiosk | **Works** — primary dev target |
 | Android box / mobile browser kiosk | **Partial** — HTTP/WebView fixed; blink/capture profile **pending** |
 | Admin Portal grant PLANT_ADMIN UI | API done (`POST /admin/users/grant`); SUPER_ADMIN UI **not built** |
-| Path B kiosk admin batch | Not built (`AGENTS.md`) |
-| SDK STATE 3 two-button overlay | Register works via `authenticateOrRegister`; explicit UI pending |
-| Mendix npm package publish | SDK code ready; packaging pending |
+| Path B kiosk admin batch | **Done (2026-09-01)** |
+| SDK STATE 3 two-button overlay | **Done (2026-09-01)** |
+| Mendix npm package publish | Build ready; Mendix integration pending |
+
+### Next steps (superseded — see 2026-09-01 section below)
+
+1. ~~Retest Android kiosk~~ — ongoing with ngrok + `/api` proxy
+2. **SDK capture profiles** for Android kiosk — blink + face smoothness (**still pending**)
+3. ~~SDK Not Enrolled two-button overlay~~ — **done 2026-09-01**
+4. Admin Portal **grant PLANT_ADMIN** UI (SUPER_ADMIN only) — **still pending**
+5. ~~Path B `/kiosk/admin-*`~~ — **done 2026-09-01**
+6. Mendix SDK npm package handoff + client Debian backend deploy — **packaging ready; Mendix integration pending**
+
+## Work completed 2026-09-01 — Path B kiosk enroll, SDK state machine, brand UI, dev DB reset
+
+Full SDK overlay state machine (STATE 3–5) and Path B backend are implemented. Brand palette applied across SDK, Admin Portal, and test harness. Enrollment face preview added after capture.
+
+### Backend — Path B kiosk admin
+
+| Area | Files / endpoints | Status |
+|------|-------------------|--------|
+| Kiosk admin routes | `backend/app/api/routes/kiosk_admin.py` — prefix `/kiosk` | Done |
+| Kiosk admin service | `backend/app/services/kiosk_admin.py` | Done |
+| Schemas | `backend/app/schemas/kiosk_admin.py` | Done |
+| `POST /kiosk/admin-login` | Admin Employee ID + password → `admin_session_token` (reuses `admin_roles`) | Done |
+| `POST /kiosk/admin-enroll` | Fresh face + target `employee_id` → ACTIVE immediately (`source=ADMIN_KIOSK`, audit log) | Done |
+| `POST /kiosk/admin-logout` | Invalidate session | Done |
+| PLANT_ADMIN only | SUPER_ADMIN blocked from kiosk enroll (`KIOSK_PLANT_REQUIRED`) | Done |
+| Router wired | `backend/app/main.py` | Done |
+
+**Path B invariants enforced:**
+- Separate from Path A (`/register`) and Admin Portal (`/admin/*`)
+- Never creates PENDING — always APPROVED at capture
+- Full `audit_log` on every enroll
+- Session token re-validated on every `/kiosk/admin-enroll`
+
+### SDK — state machine + Path B (FaceAuthSDK.ts)
+
+| State | UI | Behavior |
+|-------|-----|----------|
+| STATE 3 | `NotEnrolledChoiceOverlay` | [Employee Register] → Path A \| [Admin Kiosk Login] → Path B |
+| STATE 4 | `AdminKioskLoginOverlay` | Admin password login → `POST /kiosk/admin-login` |
+| STATE 5 | `AdminEnrollLoopOverlay` | Fresh capture per worker → `POST /kiosk/admin-enroll`; repeat until End Session |
+
+**`authenticateOrRegister()` outcomes:** `authenticated` \| `denied` \| `registered` \| `admin_kiosk_session_completed`
+
+**Path B rules in SDK:**
+- During STATE 5, `authenticate()` is blocked — enroll loop only
+- Path B never reuses failed-auth JPEG; Path A reuses auth JPEG on register
+- Admin session teardown on End Session → `POST /kiosk/admin-logout`
+
+**New / updated SDK files:**
+
+| Area | Files | Status |
+|------|-------|--------|
+| State machine orchestrator | `sdk/src/sdk/FaceAuthSDK.ts` | Done |
+| Not enrolled choice | `sdk/src/components/NotEnrolledChoiceOverlay.tsx` | Done |
+| Admin kiosk login | `sdk/src/components/AdminKioskLoginOverlay.tsx` | Done |
+| Admin enroll loop | `sdk/src/components/AdminEnrollLoopOverlay.tsx` | Done |
+| Enrollment face preview | `sdk/src/components/EnrollmentFacePreviewOverlay.tsx` | Done |
+| Kiosk API client | `sdk/src/api/FaceAuthClient.ts` — `kioskAdminLogin/Enroll/Logout` | Done |
+| Kiosk types | `sdk/src/types/kioskAdmin.types.ts` | Done |
+| Brand theme tokens | `sdk/src/ui/brandTheme.ts` | Done |
+
+**Brand palette (shared):** `#00843D` primary, `#F5A400` secondary, `#F7F8F6` background, `#1F2937` text, `#D9DED9` border — applied to all SDK overlays, `AuthScoreToast`, Admin Portal components, and test harness.
+
+**Enrollment face preview (enrollment only — not login):**
+- Path A: brief preview after choosing Employee Register, before register form (~1.8s default)
+- Path B: brief preview after fresh capture, before `POST /kiosk/admin-enroll`
+- Config: `enrollmentPreviewDurationMs` on `createFaceAuthSDK()`
+
+**Operator feedback toasts (`feedbackToastMappers.ts`):**
+- User-friendly, brand-themed copy for all kiosk admin error codes
+- Registration, auth, capture, and network errors with titles + hints
+- Avoids duplicate toasts on capture errors during admin enroll loop
+
+### Admin Portal — brand restyle
+
+| Area | Change |
+|------|--------|
+| `admin-portal/src/index.css` + components | Brand colors aligned with SDK (`App`, `LoginForm`, `RequestTable`, `RequestDetails`, `DecisionDialog`) |
+
+### Test harness — updated
+
+| Area | Change |
+|------|--------|
+| `test-harness/src/App.tsx` | Brand styling; uses full `authenticateOrRegister()` flow including Path B |
+
+### SDK npm packaging
+
+| Area | Change |
+|------|--------|
+| `sdk/package.json` | `main`, `exports`, `files: ["dist"]` for Mendix handoff |
+| Build output | `npm run build` → `dist/face-auth-sdk.js` (~1MB) + vision bundle |
+| Recommended handoff | `npm pack` → `.tgz` to Mendix team (no paid private npm required) |
+| Dev workflow unchanged | Test harness aliases `@face-auth/sdk` → `sdk/src` via Vite — no rebuild needed for local dev |
+
+### Dev database reset script
+
+| Script | Purpose |
+|--------|---------|
+| `backend/testing/dev-enroll/reset_dev_database.py` | TRUNCATE app data (workers, enrollments, registrations, images, audit, admins, plants); keeps schema + `admin_permissions` catalog |
+
+**Fresh enrollment dev flow:**
+
+```text
+cd backend
+python testing/dev-enroll/reset_dev_database.py
+python testing/dev-enroll/seed_super_admin.py   # SUPER001 / changeme
+python testing/dev-enroll/seed_admin.py         # ADMIN001 / changeme, DEV01
+```
+
+Workers are **not** pre-seeded — enroll via test harness Path A (register → approve) or Path B (admin kiosk batch).
+
+### End-to-end test flows (current)
+
+**Path A — employee self-register:**
+
+```text
+1. reset + seed (above) + uvicorn + test-harness
+2. Authenticate with new Employee ID → Not Enrolled → Employee Register
+3. Face preview → Register form (DEV01 + name) → Submit → PENDING
+4. Admin Portal (ADMIN001) → approve
+5. Re-authenticate → login succeeds
+```
+
+**Path B — admin kiosk batch enroll:**
+
+```text
+1. reset + seed + uvicorn + test-harness
+2. Authenticate with unknown ID → Not Enrolled → Admin Kiosk Login
+3. ADMIN001 / changeme → Enroll workers loop
+4. Enter worker ID → Capture → face preview → ACTIVE immediately
+5. End session when finished
+```
+
+**ngrok kiosk testing (unchanged):**
+
+- Tunnel port **5173**; `VITE_API_BASE_URL=/api` so device hits Vite proxy → backend on laptop
+- Do not use `localhost:8000` on Android — use same-origin `/api` or separate backend ngrok tunnel
+
+### Known limitations (updated 2026-09-01)
+
+| Topic | Status |
+|-------|--------|
+| Desktop Chrome + USB webcam kiosk | **Works** — primary dev target |
+| Android box / mobile browser kiosk | **Partial** — HTTP/WebView fixed; blink/capture profile **pending** |
+| Path A registration-first hybrid | **Done** |
+| Path B kiosk admin batch enroll | **Done** |
+| SDK STATE 3–5 overlays | **Done** |
+| Enrollment face preview | **Done** (SDK-only, enrollment flows) |
+| Admin Portal grant PLANT_ADMIN UI | API done; SUPER_ADMIN UI **not built** |
+| Mendix npm package publish | Build + `npm pack` ready; Mendix integration **pending** |
+| `AGENTS.md` | May still say Path B / STATE 3–5 pending — update when convenient |
 
 ### Next steps (current priority)
 
-1. **Retest Android kiosk** with `/api` ngrok setup + `FaceAuthClient` fix — confirm auth/register HTTP works
-2. **SDK capture profiles** for Android kiosk (files above) — blink + face smoothness
-3. SDK **Not Enrolled** two-button overlay (Register vs Admin Login)
-4. Admin Portal **grant PLANT_ADMIN** UI (SUPER_ADMIN only)
-5. Path B `/kiosk/admin-*` when batch enroll at kiosk is required
-6. Mendix SDK npm package handoff + client Debian backend deploy
+1. **Retest end-to-end** Path A + Path B on desktop and Android ngrok kiosk after fresh DB reset
+2. **SDK capture profiles** for Android kiosk — blink + camera smoothness (see 2026-08-31 section)
+3. Admin Portal **grant PLANT_ADMIN** UI (SUPER_ADMIN only)
+4. Mendix SDK `.tgz` handoff + integration on client kiosk
+5. Backend pytest for `/kiosk/admin-*` routes
+6. Sync `AGENTS.md` status table with Path B / STATE 3–5 completion
 
 ## Technology Stack
 
