@@ -37,6 +37,7 @@ import type {
   FaceCaptureResult,
 } from "../types/auth.types";
 import { CaptureStatus } from "./CaptureStatus";
+import { BRAND, BRAND_DERIVED, overlayShellStyles } from "../ui/brandTheme";
 
 export interface CameraOverlayProps {
   open: boolean;
@@ -574,27 +575,11 @@ function resolveStatusLabel(
 }
 
 const styles: Record<string, CSSProperties> = {
-  root: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 9999,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "rgba(0, 0, 0, 0.72)",
-    padding: 16,
-    boxSizing: "border-box",
-  },
+  root: overlayShellStyles.root,
   panel: {
+    ...overlayShellStyles.panel,
     width: "min(720px, 100%)",
-    background: "#111827",
-    color: "#f9fafb",
-    borderRadius: 12,
     padding: 16,
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
   },
   header: {
     display: "flex",
@@ -606,11 +591,12 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     fontSize: 18,
     fontWeight: 600,
+    color: BRAND.text,
   },
   closeButton: {
-    border: "1px solid #4b5563",
-    background: "#1f2937",
-    color: "#f9fafb",
+    border: `1px solid ${BRAND.border}`,
+    background: BRAND_DERIVED.panel,
+    color: BRAND.text,
     borderRadius: 8,
     padding: "8px 12px",
     cursor: "pointer",
@@ -622,6 +608,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#000",
     borderRadius: 8,
     overflow: "hidden",
+    border: `1px solid ${BRAND.border}`,
   },
   video: {
     width: "100%",
@@ -639,17 +626,18 @@ const styles: Record<string, CSSProperties> = {
     padding: 16,
     textAlign: "center",
     fontSize: 16,
+    color: "#ffffff",
   },
   instruction: {
     margin: 0,
     textAlign: "center",
     fontSize: 15,
-    color: "#e5e7eb",
+    color: BRAND_DERIVED.textMuted,
   },
   error: {
     margin: 0,
     textAlign: "center",
     fontSize: 14,
-    color: "#fca5a5",
+    color: "#b91c1c",
   },
 };

@@ -3,21 +3,21 @@
  *
  * Architecture
  * ------------
- *   FaceAuthSDK.authenticate() / register()
+ *   FaceAuthSDK.authenticate() / register() / kioskAdmin*
  *         ↓
- *   FaceAuthClient.authenticate() | register()     ← this module
+ *   FaceAuthClient                              ← this module
  *         ↓
- *   POST {apiBaseUrl}/authenticate  |  /register
- *         multipart: employee_id + image (JPEG)
+ *   POST {apiBaseUrl}/authenticate | /register | /kiosk/admin-*
  *         ↓
- *   AuthenticateResult (200) | RegisterResult (201)  OR  FaceAuthApiError
+ *   Typed result OR FaceAuthApiError
  *
  * System boundary
  * ---------------
- * - Owns HTTPS transport only (FormData + fetch).
+ * - Owns HTTPS transport only (JSON + FormData + fetch).
  * - Does NOT open the camera or run liveness (FaceAuthSDK).
  * - Wrong face on auth is HTTP 200 with authenticated=false (not thrown).
- * - Register success is HTTP 201 PENDING — does not log user into Mendix.
+ * - Path A register success is HTTP 201 PENDING — does not log user into Mendix.
+ * - Path B kiosk admin enroll is HTTP 201 ACTIVE — worker may authenticate immediately.
  *
  * Mendix never imports this directly; use createFaceAuthSDK().
  */
@@ -55,6 +55,29 @@ import {
   isRegisterResult,
   isRegistrationErrorBody,
 } from "../types/registration.types";
+import type {
+  KioskAdminEnrollRequest,
+  KioskAdminEnrollResult,
+  KioskAdminErrorBody,
+  KioskAdminErrorCode,
+  KioskAdminLoginRequest,
+  KioskAdminLoginResponse,
+  KioskAdminLogoutResult,
+} from "../types/kioskAdmin.types";
+import {
+  KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD,
+  KIOSK_ADMIN_ENROLL_IMAGE_FIELD,
+  KIOSK_ADMIN_ENROLL_KIOSK_ID_FIELD,
+  KIOSK_ADMIN_ENROLL_PATH,
+  KIOSK_ADMIN_ENROLL_SESSION_ID_FIELD,
+  KIOSK_ADMIN_LOGIN_PATH,
+  KIOSK_ADMIN_LOGOUT_PATH,
+  KIOSK_ADMIN_SESSION_HEADER,
+  isKioskAdminEnrollResult,
+  isKioskAdminErrorBody,
+  isKioskAdminLoginResponse,
+  isKioskAdminLogoutResult,
+} from "../types/kioskAdmin.types";
 
 /**
  * Fetch with timeout via AbortController — do not use AbortSignal.timeout();
@@ -89,6 +112,7 @@ function networkErrorDetail(error: unknown, timeoutMs: number): string {
 export type FaceAuthClientErrorCode =
   | AuthErrorCode
   | RegistrationErrorCode
+  | KioskAdminErrorCode
   | "API_NOT_CONFIGURED"
   | "NETWORK_ERROR"
   | "INVALID_RESPONSE";
@@ -117,6 +141,13 @@ export interface AuthenticateRequest {
 }
 
 export type { RegisterRequest, RegisterResult };
+export type {
+  KioskAdminEnrollRequest,
+  KioskAdminEnrollResult,
+  KioskAdminLoginRequest,
+  KioskAdminLoginResponse,
+  KioskAdminLogoutResult,
+};
 
 /**
  * Thrown when POST /authenticate or POST /register fails (4xx/5xx) or the
@@ -172,6 +203,17 @@ export class FaceAuthApiError extends Error {
       detail: body.detail,
     });
   }
+
+  static fromKioskAdminErrorBody(
+    body: KioskAdminErrorBody,
+    httpStatus: number,
+  ): FaceAuthApiError {
+    return new FaceAuthApiError(body.detail, {
+      httpStatus,
+      code: body.code,
+      detail: body.detail,
+    });
+  }
 }
 
 /** Duck-type check — avoids instanceof failures when bundlers duplicate the class. */
@@ -215,6 +257,18 @@ export class FaceAuthClient {
 
   get plantsUrl(): string {
     return `${this.apiBaseUrl}${PLANTS_PATH}`;
+  }
+
+  get kioskAdminLoginUrl(): string {
+    return `${this.apiBaseUrl}${KIOSK_ADMIN_LOGIN_PATH}`;
+  }
+
+  get kioskAdminEnrollUrl(): string {
+    return `${this.apiBaseUrl}${KIOSK_ADMIN_ENROLL_PATH}`;
+  }
+
+  get kioskAdminLogoutUrl(): string {
+    return `${this.apiBaseUrl}${KIOSK_ADMIN_LOGOUT_PATH}`;
   }
 
   /** GET /plants — active plants for Register UI dropdown. */
@@ -315,12 +369,134 @@ export class FaceAuthClient {
     return this.parseRegisterResponse(response);
   }
 
-  private async postMultipart(url: string, form: FormData): Promise<Response> {
+  /**
+   * POST /kiosk/admin-login — admin operator employeeId + password.
+   *
+   * Returns session token for enroll/logout. Does not enroll anyone.
+   */
+  async kioskAdminLogin(
+    request: KioskAdminLoginRequest,
+  ): Promise<KioskAdminLoginResponse> {
+    const employeeId = request.employeeId.trim();
+    const password = request.password;
+    if (!employeeId || !password) {
+      throw new FaceAuthApiError("Admin employeeId and password are required.", {
+        httpStatus: 0,
+        code: "INVALID_CREDENTIALS",
+        detail: "Admin employeeId and password are required.",
+      });
+    }
+
+    const response = await this.postJson(this.kioskAdminLoginUrl, {
+      employeeId,
+      password,
+    });
+    return this.parseKioskAdminLoginResponse(response);
+  }
+
+  /**
+   * POST /kiosk/admin-enroll — enroll one target worker (fresh JPEG).
+   *
+   * Requires admin session token. plantId is assigned server-side from session.
+   * Does NOT send plantId in the multipart body.
+   */
+  async kioskAdminEnroll(
+    adminSessionToken: string,
+    request: KioskAdminEnrollRequest,
+  ): Promise<KioskAdminEnrollResult> {
+    const token = adminSessionToken.trim();
+    if (!token) {
+      throw new FaceAuthApiError("Admin session token is required.", {
+        httpStatus: 0,
+        code: "UNAUTHORIZED",
+        detail: "Admin session token is required for kiosk enroll.",
+      });
+    }
+
+    const employeeId = request.employeeId.trim();
+    const { blob, filename } = this.resolveImagePayload(
+      request.image,
+      request.filename,
+    );
+
+    const form = new FormData();
+    form.append(KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD, employeeId);
+    form.append(KIOSK_ADMIN_ENROLL_IMAGE_FIELD, blob, filename);
+
+    const kioskId = request.kioskId?.trim();
+    if (kioskId) {
+      form.append(KIOSK_ADMIN_ENROLL_KIOSK_ID_FIELD, kioskId);
+    }
+
+    const sessionId = request.sessionId?.trim();
+    if (sessionId) {
+      form.append(KIOSK_ADMIN_ENROLL_SESSION_ID_FIELD, sessionId);
+    }
+
+    const response = await this.postMultipart(this.kioskAdminEnrollUrl, form, {
+      [KIOSK_ADMIN_SESSION_HEADER]: token,
+    });
+    return this.parseKioskAdminEnrollResponse(response);
+  }
+
+  /**
+   * POST /kiosk/admin-logout — invalidate admin kiosk session.
+   */
+  async kioskAdminLogout(
+    adminSessionToken: string,
+  ): Promise<KioskAdminLogoutResult> {
+    const token = adminSessionToken.trim();
+    const response = await this.postJson(
+      this.kioskAdminLogoutUrl,
+      {},
+      token ? { [KIOSK_ADMIN_SESSION_HEADER]: token } : undefined,
+    );
+    return this.parseKioskAdminLogoutResponse(response);
+  }
+
+  private async postJson(
+    url: string,
+    body: unknown,
+    headers?: Record<string, string>,
+  ): Promise<Response> {
     try {
       return await fetchWithTimeout(
         this.fetchFn,
         url,
-        { method: "POST", body: form },
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify(body),
+        },
+        this.timeoutMs,
+      );
+    } catch (error) {
+      const detail = networkErrorDetail(error, this.timeoutMs);
+      throw new FaceAuthApiError(detail, {
+        httpStatus: 0,
+        code: "NETWORK_ERROR",
+        detail,
+      });
+    }
+  }
+
+  private async postMultipart(
+    url: string,
+    form: FormData,
+    headers?: Record<string, string>,
+  ): Promise<Response> {
+    try {
+      return await fetchWithTimeout(
+        this.fetchFn,
+        url,
+        {
+          method: "POST",
+          headers,
+          body: form,
+        },
         this.timeoutMs,
       );
     } catch (error) {
@@ -415,6 +591,96 @@ export class FaceAuthClient {
     }
 
     throw this.unexpectedErrorResponse(payload, httpStatus, REGISTER_PATH);
+  }
+
+  private async parseKioskAdminLoginResponse(
+    response: Response,
+  ): Promise<KioskAdminLoginResponse> {
+    const httpStatus = response.status;
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      throw new FaceAuthApiError("Backend returned a non-JSON response.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail: `Expected JSON from POST ${KIOSK_ADMIN_LOGIN_PATH}.`,
+      });
+    }
+
+    if (response.ok && isKioskAdminLoginResponse(payload)) {
+      return payload;
+    }
+
+    if (isKioskAdminErrorBody(payload)) {
+      throw FaceAuthApiError.fromKioskAdminErrorBody(payload, httpStatus);
+    }
+
+    throw this.unexpectedErrorResponse(payload, httpStatus, KIOSK_ADMIN_LOGIN_PATH);
+  }
+
+  private async parseKioskAdminEnrollResponse(
+    response: Response,
+  ): Promise<KioskAdminEnrollResult> {
+    const httpStatus = response.status;
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      throw new FaceAuthApiError("Backend returned a non-JSON response.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail: `Expected JSON from POST ${KIOSK_ADMIN_ENROLL_PATH}.`,
+      });
+    }
+
+    if (httpStatus === 201 && isKioskAdminEnrollResult(payload)) {
+      return payload;
+    }
+
+    if (isKioskAdminErrorBody(payload)) {
+      throw FaceAuthApiError.fromKioskAdminErrorBody(payload, httpStatus);
+    }
+
+    if (response.ok && !isKioskAdminEnrollResult(payload)) {
+      throw new FaceAuthApiError("Backend returned an invalid success body.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail:
+          "Missing success, requestId, employeeId, plantId, enrollmentStatus, or message.",
+      });
+    }
+
+    throw this.unexpectedErrorResponse(payload, httpStatus, KIOSK_ADMIN_ENROLL_PATH);
+  }
+
+  private async parseKioskAdminLogoutResponse(
+    response: Response,
+  ): Promise<KioskAdminLogoutResult> {
+    const httpStatus = response.status;
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      throw new FaceAuthApiError("Backend returned a non-JSON response.", {
+        httpStatus,
+        code: "INVALID_RESPONSE",
+        detail: `Expected JSON from POST ${KIOSK_ADMIN_LOGOUT_PATH}.`,
+      });
+    }
+
+    if (response.ok && isKioskAdminLogoutResult(payload)) {
+      return payload;
+    }
+
+    if (isKioskAdminErrorBody(payload)) {
+      throw FaceAuthApiError.fromKioskAdminErrorBody(payload, httpStatus);
+    }
+
+    throw this.unexpectedErrorResponse(payload, httpStatus, KIOSK_ADMIN_LOGOUT_PATH);
   }
 
   private unexpectedErrorResponse(

@@ -91,6 +91,20 @@ export {
 /** Advanced / test-only exports — Mendix should prefer createFaceAuthSDK(). */
 export { CameraOverlay, type CameraOverlayProps } from "./components/CameraOverlay";
 export { RegisterOverlay, type RegisterOverlayProps, type RegisterSubmitPayload } from "./components/RegisterOverlay";
+export {
+  NotEnrolledChoiceOverlay,
+  type NotEnrolledChoiceOverlayProps,
+  type NotEnrolledChoice,
+} from "./components/NotEnrolledChoiceOverlay";
+export {
+  AdminEnrollLoopOverlay,
+  type AdminEnrollLoopOverlayProps,
+} from "./components/AdminEnrollLoopOverlay";
+export {
+  AdminKioskLoginOverlay,
+  type AdminKioskLoginOverlayProps,
+  type AdminKioskLoginSubmitPayload,
+} from "./components/AdminKioskLoginOverlay";
 export { AuthScoreToast, type AuthScoreToastProps } from "./components/AuthScoreToast";
 export {
   showSdkFeedbackToast,

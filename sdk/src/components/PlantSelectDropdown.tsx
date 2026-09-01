@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import type { PlantListItem } from "../types/registration.types";
+import { BRAND, BRAND_DERIVED } from "../ui/brandTheme";
 
 export type PlantSelectDropdownProps = {
   plants: PlantListItem[];
@@ -253,21 +254,21 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     padding: "10px 14px",
     borderRadius: 8,
-    border: "1px solid #cbd5e1",
-    background: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${BRAND.border}`,
+    background: BRAND_DERIVED.panel,
+    color: BRAND.text,
     fontSize: 15,
     textAlign: "left",
     cursor: "pointer",
   },
   triggerOpen: {
-    borderColor: "#1e3a5f",
-    boxShadow: "0 0 0 3px rgba(30, 58, 95, 0.12)",
+    borderColor: BRAND.primary,
+    boxShadow: `0 0 0 3px ${BRAND_DERIVED.focusRing}`,
   },
   triggerDisabled: {
     opacity: 0.6,
     cursor: "not-allowed",
-    background: "#f8fafc",
+    background: BRAND.background,
   },
   triggerContent: {
     display: "flex",
@@ -277,20 +278,20 @@ const styles: Record<string, CSSProperties> = {
   },
   triggerPrimary: {
     fontWeight: 600,
-    color: "#0f172a",
+    color: BRAND.text,
     lineHeight: 1.3,
   },
   triggerSecondary: {
     fontSize: 13,
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
     letterSpacing: "0.02em",
   },
   placeholder: {
-    color: "#94a3b8",
+    color: BRAND_DERIVED.textSubtle,
     fontWeight: 400,
   },
   chevron: {
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
     fontSize: 14,
     flexShrink: 0,
   },
@@ -300,10 +301,10 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 20,
-    background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    background: BRAND_DERIVED.panel,
+    border: `1px solid ${BRAND.border}`,
     borderRadius: 10,
-    boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
+    boxShadow: "0 16px 40px rgba(31, 41, 55, 0.12)",
     overflow: "hidden",
     maxHeight: "min(320px, 50vh)",
     display: "flex",
@@ -314,11 +315,11 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 8,
     padding: "10px 12px",
-    borderBottom: "1px solid #e2e8f0",
-    background: "#f8fafc",
+    borderBottom: `1px solid ${BRAND.border}`,
+    background: BRAND.background,
   },
   searchIcon: {
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
     fontSize: 16,
     lineHeight: 1,
   },
@@ -328,7 +329,7 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
     background: "transparent",
     fontSize: 14,
-    color: "#0f172a",
+    color: BRAND.text,
   },
   list: {
     listStyle: "none",
@@ -339,7 +340,7 @@ const styles: Record<string, CSSProperties> = {
   emptyItem: {
     padding: "14px 16px",
     fontSize: 14,
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
   },
   option: {
     width: "100%",
@@ -354,15 +355,15 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   optionHighlighted: {
-    background: "#f1f5f9",
+    background: BRAND.background,
   },
   optionSelected: {
-    background: "#eef4fb",
+    background: BRAND_DERIVED.primaryTint,
   },
   optionMarker: {
     width: 16,
     flexShrink: 0,
-    color: "#1e3a5f",
+    color: BRAND.primary,
     fontSize: 13,
     lineHeight: "20px",
   },
@@ -375,12 +376,12 @@ const styles: Record<string, CSSProperties> = {
   optionName: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#0f172a",
+    color: BRAND.text,
     lineHeight: 1.35,
   },
   optionCode: {
     fontSize: 12,
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
     letterSpacing: "0.04em",
     textTransform: "uppercase",
   },

@@ -2,13 +2,23 @@
 
 @theme {
   --font-sans: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --color-brand-50: #ecfdf8;
-  --color-brand-100: #d1faf0;
-  --color-brand-600: #0f766e;
-  --color-brand-700: #0f5f5a;
-  --color-brand-800: #115e59;
-  --color-surface: #f1f5f9;
-  --color-ink: #0f172a;
+
+  /* Brand tokens */
+  --color-primary: #00843d;
+  --color-secondary: #f5a400;
+  --color-background: #f7f8f6;
+  --color-text: #1f2937;
+  --color-border: #d9ded9;
+  --color-text-muted: #6b7280;
+
+  /* Tailwind aliases used across admin portal */
+  --color-brand-50: #e6f4ec;
+  --color-brand-100: #cce9d9;
+  --color-brand-600: #00843d;
+  --color-brand-700: #006b31;
+  --color-brand-800: #005427;
+  --color-surface: #f7f8f6;
+  --color-ink: #1f2937;
 }
 
 @layer base {
@@ -19,6 +29,6 @@
   }
 
   body {
-    @apply m-0 bg-surface font-sans text-ink antialiased;
+    @apply m-0 bg-background font-sans text-text antialiased;
   }
 }

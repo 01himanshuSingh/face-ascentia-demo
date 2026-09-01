@@ -1,54 +1,26 @@
 import { useEffect, type CSSProperties, type ReactElement } from "react";
 
 import type { SdkFeedbackPayload } from "../ui/feedbackToast.types";
+import { BRAND, BRAND_DERIVED, FEEDBACK_TOAST_PALETTE } from "../ui/brandTheme";
 
 export type AuthScoreToastProps = SdkFeedbackPayload & {
   onDismiss?: () => void;
 };
 
-const VARIANT_STYLES: Record<
-  SdkFeedbackPayload["variant"],
-  { accent: string; bg: string; border: string; icon: string }
-> = {
-  success: {
-    accent: "#166534",
-    bg: "#f0fdf4",
-    border: "#bbf7d0",
-    icon: "✓",
-  },
-  warning: {
-    accent: "#b45309",
-    bg: "#fffbeb",
-    border: "#fde68a",
-    icon: "!",
-  },
-  error: {
-    accent: "#b91c1c",
-    bg: "#fef2f2",
-    border: "#fecaca",
-    icon: "✕",
-  },
-  info: {
-    accent: "#1e3a5f",
-    bg: "#f8fafc",
-    border: "#cbd5e1",
-    icon: "i",
-  },
-};
-
 /**
- * Mendix-facing operator toast — auth scores, thresholds, backend/capture errors.
- * Rendered by the SDK only; Mendix page stays Employee ID + Authenticate.
+ * Operator feedback toast — auth scores, enroll errors, capture guidance.
+ * Brand-themed; Mendix page stays Employee ID + Authenticate only.
  */
 export function AuthScoreToast({
   variant,
   title,
   message,
   code,
+  hint,
   details = [],
   onDismiss,
 }: AuthScoreToastProps): ReactElement {
-  const palette = VARIANT_STYLES[variant];
+  const palette = FEEDBACK_TOAST_PALETTE[variant];
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -72,6 +44,7 @@ export function AuthScoreToast({
           ...styles.toast,
           background: palette.bg,
           borderColor: palette.border,
+          boxShadow: `${BRAND_DERIVED.panelShadow}, inset 4px 0 0 ${palette.accent}`,
         }}
       >
         <div style={styles.header}>
@@ -80,14 +53,14 @@ export function AuthScoreToast({
               ...styles.icon,
               color: palette.accent,
               borderColor: palette.border,
+              background: BRAND_DERIVED.panel,
             }}
             aria-hidden
           >
             {palette.icon}
           </span>
           <div style={styles.headerCopy}>
-            <p style={{ ...styles.title, color: palette.accent }}>{title}</p>
-            {code ? <p style={styles.code}>{code}</p> : null}
+            <p style={{ ...styles.title, color: BRAND.text }}>{title}</p>
           </div>
           {onDismiss ? (
             <button
@@ -103,6 +76,21 @@ export function AuthScoreToast({
 
         <p style={styles.message}>{message}</p>
 
+        {hint ? (
+          <p
+            style={{
+              ...styles.hint,
+              ...(variant === "success" || variant === "info"
+                ? styles.hintPositive
+                : variant === "warning"
+                  ? styles.hintWarning
+                  : styles.hintError),
+            }}
+          >
+            {hint}
+          </p>
+        ) : null}
+
         {details.length > 0 ? (
           <dl style={styles.details}>
             {details.map((row) => (
@@ -112,6 +100,12 @@ export function AuthScoreToast({
               </div>
             ))}
           </dl>
+        ) : null}
+
+        {code ? (
+          <p style={styles.supportCode} aria-hidden>
+            Ref: {code}
+          </p>
         ) : null}
       </div>
     </div>
@@ -124,17 +118,15 @@ const styles: Record<string, CSSProperties> = {
     top: 16,
     right: 16,
     zIndex: 10000,
-    width: "min(380px, calc(100vw - 32px))",
+    width: "min(400px, calc(100vw - 32px))",
     pointerEvents: "none",
-    fontFamily:
-      '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
+    fontFamily: BRAND_DERIVED.fontFamily,
   },
   toast: {
     pointerEvents: "auto",
     border: "1px solid",
     borderRadius: 12,
-    padding: "14px 16px",
-    boxShadow: "0 16px 40px rgba(15, 23, 42, 0.14)",
+    padding: "14px 16px 12px",
   },
   header: {
     display: "flex",
@@ -151,7 +143,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     fontWeight: 700,
     flexShrink: 0,
-    background: "#ffffff",
   },
   headerCopy: {
     flex: 1,
@@ -159,17 +150,9 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 700,
     lineHeight: 1.35,
-  },
-  code: {
-    margin: "2px 0 0",
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    color: "#64748b",
   },
   dismiss: {
     width: 28,
@@ -177,41 +160,72 @@ const styles: Record<string, CSSProperties> = {
     border: "none",
     borderRadius: 8,
     background: "transparent",
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
     fontSize: 20,
     lineHeight: 1,
     cursor: "pointer",
     flexShrink: 0,
   },
   message: {
-    margin: "10px 0 0",
+    margin: "8px 0 0",
     fontSize: 13,
-    lineHeight: 1.5,
-    color: "#334155",
+    lineHeight: 1.55,
+    color: BRAND.text,
+  },
+  hint: {
+    margin: "10px 0 0",
+    padding: "8px 10px",
+    borderRadius: 8,
+    fontSize: 12,
+    lineHeight: 1.45,
+    fontWeight: 500,
+  },
+  hintPositive: {
+    background: "rgba(255, 255, 255, 0.65)",
+    color: BRAND_DERIVED.primaryHover,
+    border: `1px solid ${BRAND.border}`,
+  },
+  hintWarning: {
+    background: "rgba(255, 255, 255, 0.72)",
+    color: "#7a5c00",
+    border: `1px solid #f5d066`,
+  },
+  hintError: {
+    background: "rgba(255, 255, 255, 0.72)",
+    color: "#912018",
+    border: "1px solid #fecdca",
   },
   details: {
-    margin: "12px 0 0",
+    margin: "10px 0 0",
     padding: "10px 12px",
     borderRadius: 8,
     background: "rgba(255, 255, 255, 0.72)",
+    border: `1px solid ${BRAND.border}`,
     display: "grid",
     gap: 6,
   },
   detailRow: {
     display: "grid",
-    gridTemplateColumns: "118px 1fr",
+    gridTemplateColumns: "112px 1fr",
     gap: 8,
     fontSize: 12,
   },
   detailLabel: {
     margin: 0,
-    color: "#64748b",
+    color: BRAND_DERIVED.textMuted,
     fontWeight: 500,
   },
   detailValue: {
     margin: 0,
-    color: "#0f172a",
+    color: BRAND.text,
     fontWeight: 600,
     wordBreak: "break-word",
+  },
+  supportCode: {
+    margin: "8px 0 0",
+    fontSize: 10,
+    letterSpacing: "0.04em",
+    color: BRAND_DERIVED.textSubtle,
+    textAlign: "right",
   },
 };

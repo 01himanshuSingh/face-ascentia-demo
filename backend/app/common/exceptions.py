@@ -33,6 +33,7 @@ from typing import Any
 
 from app.schemas.auth import AuthErrorCode, AuthErrorResponse
 from app.schemas.admin import AdminErrorCode, AdminErrorResponse
+from app.schemas.kiosk_admin import KioskAdminErrorCode, KioskAdminErrorResponse
 from app.schemas.registration import RegistrationErrorCode, RegistrationErrorResponse
 
 
@@ -60,8 +61,15 @@ class AppError(Exception):
 
     def to_error_response(
         self,
-    ) -> AuthErrorResponse | RegistrationErrorResponse | AdminErrorResponse:
+    ) -> (
+        AuthErrorResponse
+        | RegistrationErrorResponse
+        | AdminErrorResponse
+        | KioskAdminErrorResponse
+    ):
         """Build the HTTP error body for the endpoint domain."""
+        if isinstance(self, KioskAdminError):
+            return KioskAdminErrorResponse(detail=self.message, code=self.kiosk_code)
         if isinstance(self, AdminError):
             return AdminErrorResponse(detail=self.message, code=self.admin_code)
         if isinstance(self, RegistrationError):
@@ -412,9 +420,88 @@ class AdminError(AppError):
         self.admin_code = code
 
 
+# ---------------------------------------------------------------------------
+# Kiosk admin domain (POST /kiosk/admin-* — Path B)
+# ---------------------------------------------------------------------------
+
+
+class KioskAdminError(AppError):
+    """
+    Namespace for kiosk admin login / worker enroll failures.
+
+    Face pipeline errors are re-labeled from AuthError or RegistrationError so
+    POST /kiosk/admin-enroll returns KioskAdminErrorCode for SDK branching.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: KioskAdminErrorCode,
+        http_status: int = 400,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            code=code.value,
+            http_status=http_status,
+            details=details,
+        )
+        self.kiosk_code = code
+
+    @classmethod
+    def from_auth_error(cls, exc: AuthError) -> KioskAdminError:
+        try:
+            kiosk_code = KioskAdminErrorCode(exc.code)
+        except ValueError as err:
+            raise ValueError(
+                f"AuthError code {exc.code!r} has no KioskAdminErrorCode mapping."
+            ) from err
+        return cls(
+            exc.message,
+            code=kiosk_code,
+            http_status=exc.http_status,
+            details=exc.details or None,
+        )
+
+    @classmethod
+    def from_registration_error(cls, exc: RegistrationError) -> KioskAdminError:
+        try:
+            kiosk_code = KioskAdminErrorCode(exc.code)
+        except ValueError as err:
+            raise ValueError(
+                f"RegistrationError code {exc.code!r} has no KioskAdminErrorCode mapping."
+            ) from err
+        return cls(
+            exc.message,
+            code=kiosk_code,
+            http_status=exc.http_status,
+            details=exc.details or None,
+        )
+
+    @classmethod
+    def from_admin_error(cls, exc: AdminError) -> KioskAdminError:
+        try:
+            kiosk_code = KioskAdminErrorCode(exc.code)
+        except ValueError as err:
+            raise KioskAdminError(
+                exc.message,
+                code=KioskAdminErrorCode.PERMISSION_DENIED,
+                http_status=exc.http_status,
+                details=exc.details or None,
+            ) from err
+        return cls(
+            exc.message,
+            code=kiosk_code,
+            http_status=exc.http_status,
+            details=exc.details or None,
+        )
+
+
 __all__ = [
     "AppError",
     "AdminError",
+    "KioskAdminError",
     "AuthError",
     "MissingEmployeeIdError",
     "EmployeeNotFoundError",

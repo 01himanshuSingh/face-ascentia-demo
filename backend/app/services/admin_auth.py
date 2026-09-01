@@ -105,6 +105,12 @@ class AdminAuthService:
 
         return session
 
+    def invalidate_session(self, token: str | None) -> None:
+        """End an admin session (kiosk logout or explicit portal sign-out)."""
+        normalized = (token or "").strip()
+        if normalized:
+            self._sessions.pop(normalized, None)
+
     @staticmethod
     def hash_password(password: str) -> str:
         return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

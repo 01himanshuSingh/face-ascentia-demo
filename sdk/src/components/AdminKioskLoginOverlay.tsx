@@ -1,58 +1,40 @@
 import { useState, type CSSProperties, type FormEvent, type ReactElement } from "react";
 
-import { PlantSelectDropdown } from "./PlantSelectDropdown";
-import type { PlantListItem } from "../types/registration.types";
 import { BRAND, BRAND_DERIVED, overlayShellStyles } from "../ui/brandTheme";
 
-export interface RegisterSubmitPayload {
+export interface AdminKioskLoginSubmitPayload {
   employeeId: string;
-  plantId: string;
-  fullName: string;
+  password: string;
 }
 
-export interface RegisterOverlayProps {
+export interface AdminKioskLoginOverlayProps {
   open: boolean;
-  plants: PlantListItem[];
-  defaultEmployeeId?: string;
-  defaultFullName?: string;
-  defaultPlantId?: string;
-  subtitle?: string;
   busy?: boolean;
   errorMessage?: string | null;
-  onSubmit: (payload: RegisterSubmitPayload) => void;
+  onSubmit: (payload: AdminKioskLoginSubmitPayload) => void;
   onCancel?: () => void;
 }
 
 /**
- * Registration-first Path A — Plant + Employee ID + Full name (no camera).
- * Face JPEG is reused from the prior authenticate capture.
+ * STATE 4 — Path B admin operator login at kiosk.
+ * Same credentials as Admin Portal (admin_roles password, not face).
  */
-export function RegisterOverlay({
+export function AdminKioskLoginOverlay({
   open,
-  plants,
-  defaultEmployeeId = "",
-  defaultFullName = "",
-  defaultPlantId = "",
-  subtitle = "Complete your details after successful face capture.",
   busy = false,
   errorMessage = null,
   onSubmit,
   onCancel,
-}: RegisterOverlayProps): ReactElement | null {
-  const [employeeId, setEmployeeId] = useState(defaultEmployeeId);
-  const [fullName, setFullName] = useState(defaultFullName);
-  const [plantId, setPlantId] = useState(defaultPlantId);
+}: AdminKioskLoginOverlayProps): ReactElement | null {
+  const [employeeId, setEmployeeId] = useState("");
+  const [password, setPassword] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   if (!open) {
     return null;
   }
 
-  const canSubmit =
-    employeeId.trim().length > 0 &&
-    fullName.trim().length > 0 &&
-    plantId.trim().length > 0 &&
-    !busy;
+  const canSubmit = employeeId.trim().length > 0 && password.length > 0 && !busy;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -61,8 +43,7 @@ export function RegisterOverlay({
     }
     onSubmit({
       employeeId: employeeId.trim(),
-      plantId: plantId.trim(),
-      fullName: fullName.trim(),
+      password,
     });
   };
 
@@ -77,14 +58,14 @@ export function RegisterOverlay({
       style={styles.root}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="register-title"
+      aria-labelledby="admin-kiosk-login-title"
     >
       <div style={styles.panel}>
         <header style={styles.header}>
           <div style={styles.headerCopy}>
             <p style={styles.eyebrow}>Face Authentication</p>
-            <h2 id="register-title" style={styles.title}>
-              Register for Face Login
+            <h2 id="admin-kiosk-login-title" style={styles.title}>
+              Admin Kiosk Login
             </h2>
           </div>
           {onCancel ? (
@@ -93,64 +74,50 @@ export function RegisterOverlay({
               style={styles.iconButton}
               onClick={onCancel}
               disabled={busy}
-              aria-label="Close registration"
+              aria-label="Close admin login"
             >
               ×
             </button>
           ) : null}
         </header>
 
-        <p style={styles.subtitle}>{subtitle}</p>
+        <p style={styles.subtitle}>
+          Sign in with your admin Employee ID and password to enroll workers on
+          this kiosk. Enrollments are active immediately.
+        </p>
 
         <form style={styles.form} onSubmit={handleSubmit}>
           <div style={styles.field}>
-            <label style={styles.label} htmlFor="face-auth-register-plant">
-              Plant
-            </label>
-            <PlantSelectDropdown
-              labelId="face-auth-register-plant"
-              plants={plants}
-              value={plantId}
-              onChange={setPlantId}
-              disabled={busy}
-            />
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label} htmlFor="face-auth-register-employee-id">
-              Employee ID
+            <label style={styles.label} htmlFor="face-auth-admin-employee-id">
+              Admin Employee ID
             </label>
             <input
-              id="face-auth-register-employee-id"
-              style={inputStyle("employeeId")}
+              id="face-auth-admin-employee-id"
               type="text"
+              autoComplete="username"
               value={employeeId}
-              onChange={(event) => setEmployeeId(event.target.value)}
+              disabled={busy}
+              style={inputStyle("employeeId")}
               onFocus={() => setFocusedField("employeeId")}
               onBlur={() => setFocusedField(null)}
-              placeholder="Employee ID"
-              autoComplete="off"
-              disabled={busy}
-              required
+              onChange={(event) => setEmployeeId(event.target.value)}
             />
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label} htmlFor="face-auth-register-full-name">
-              Full Name
+            <label style={styles.label} htmlFor="face-auth-admin-password">
+              Password
             </label>
             <input
-              id="face-auth-register-full-name"
-              style={inputStyle("fullName")}
-              type="text"
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              onFocus={() => setFocusedField("fullName")}
-              onBlur={() => setFocusedField(null)}
-              placeholder="Full name"
-              autoComplete="name"
+              id="face-auth-admin-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
               disabled={busy}
-              required
+              style={inputStyle("password")}
+              onFocus={() => setFocusedField("password")}
+              onBlur={() => setFocusedField(null)}
+              onChange={(event) => setPassword(event.target.value)}
             />
           </div>
 
@@ -173,9 +140,7 @@ export function RegisterOverlay({
               >
                 Cancel
               </button>
-            ) : (
-              <span />
-            )}
+            ) : null}
             <button
               type="submit"
               style={{
@@ -187,17 +152,18 @@ export function RegisterOverlay({
               {busy ? (
                 <span style={styles.submitContent}>
                   <span style={styles.spinner} aria-hidden />
-                  Submitting…
+                  Signing in…
                 </span>
               ) : (
-                "Submit registration"
+                "Sign in"
               )}
             </button>
           </div>
         </form>
 
         <p style={styles.footer}>
-          Your plant admin will verify the details before approval.
+          Admin credentials are separate from worker face login. Workers enrolled
+          here skip the pending review queue.
         </p>
       </div>
     </div>
@@ -250,7 +216,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 600,
     color: BRAND.text,
-    letterSpacing: "0.01em",
   },
   input: {
     width: "100%",
@@ -263,7 +228,6 @@ const styles: Record<string, CSSProperties> = {
     padding: "11px 14px",
     fontSize: 15,
     outline: "none",
-    transition: "border-color 120ms ease, box-shadow 120ms ease",
   },
   inputFocused: {
     borderColor: BRAND.primary,
@@ -329,7 +293,6 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
     marginLeft: "auto",
-    transition: "background-color 120ms ease, opacity 120ms ease",
   },
   primaryButtonDisabled: {
     opacity: 0.55,
@@ -351,18 +314,3 @@ const styles: Record<string, CSSProperties> = {
   },
   footer: overlayShellStyles.footer,
 };
-
-// Spinner keyframes — injected once for SDK overlay (no external CSS dependency).
-if (
-  typeof document !== "undefined" &&
-  !document.getElementById("far-register-overlay-styles")
-) {
-  const style = document.createElement("style");
-  style.id = "far-register-overlay-styles";
-  style.textContent = `
-    @keyframes far-register-spin {
-      to { transform: rotate(360deg); }
-    }
-  `;
-  document.head.appendChild(style);
-}

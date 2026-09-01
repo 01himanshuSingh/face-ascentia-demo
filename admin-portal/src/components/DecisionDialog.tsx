@@ -31,24 +31,24 @@ export function DecisionDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-text/50 p-4 backdrop-blur-[2px]">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
       >
-        <h3 className="text-lg font-semibold text-slate-900">
+        <h3 className="text-lg font-semibold text-text">
           {isApprove ? "Approve enrollment" : "Reject registration"}
         </h3>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+        <p className="mt-2 text-sm leading-relaxed text-text-muted">
           {isApprove
             ? `Approve ${employeeId} and create an ACTIVE enrollment?`
             : `Reject registration for ${employeeId}. A reason is required.`}
         </p>
 
-        <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-slate-700">
+        <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-text">
           {isApprove ? "Note (optional)" : "Reason"}
           <textarea
-            className="min-h-24 resize-y rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 disabled:bg-slate-50"
+            className="min-h-24 resize-y rounded-lg border border-border px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
@@ -63,7 +63,7 @@ export function DecisionDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
           >
             Cancel
           </button>
@@ -73,7 +73,7 @@ export function DecisionDialog({
             className={clsx(
               "rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60",
               isApprove
-                ? "bg-emerald-600 hover:bg-emerald-700"
+                ? "bg-primary hover:bg-brand-700"
                 : "bg-red-600 hover:bg-red-700",
             )}
           >

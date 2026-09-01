@@ -62,6 +62,42 @@ def get_pending_by_employee_id(
     return db.scalars(stmt).first()
 
 
+def create_admin_kiosk_approved(
+    db: Session,
+    *,
+    employee_id: str,
+    plant_id: uuid.UUID,
+    submitted_full_name: str,
+    reviewed_by: str,
+    kiosk_id: str | None = None,
+    session_id: str | None = None,
+) -> RegistrationRequest:
+    """
+    Insert an APPROVED ADMIN_KIOSK registration_requests row (Path B).
+
+    Created at capture time — never PENDING. reviewed_by is the admin operator
+    employee_id (must exist in employees for FK).
+    """
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    row = RegistrationRequest(
+        employee_id=employee_id,
+        plant_id=plant_id,
+        submitted_full_name=submitted_full_name,
+        source=RegistrationSource.ADMIN_KIOSK.value,
+        status=RegistrationStatus.APPROVED.value,
+        kiosk_id=_optional_text(kiosk_id),
+        session_id=_optional_text(session_id),
+        reviewed_by=reviewed_by,
+        reviewed_at=now,
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return row
+
+
 def create_pending(
     db: Session,
     *,
@@ -136,6 +172,7 @@ def mark_reviewed(
 
 
 __all__ = [
+    "create_admin_kiosk_approved",
     "create_pending",
     "get_by_id",
     "get_pending_by_employee_id",

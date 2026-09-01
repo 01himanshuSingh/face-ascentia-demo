@@ -8,6 +8,7 @@ import {
   type MendixAuthenticateResult,
   type RegisterResult,
 } from "@face-auth/sdk";
+import { BRAND, BRAND_DERIVED } from "@face-auth/sdk/ui/brandTheme";
 
 /**
  * Mendix integration stand-in.
@@ -21,7 +22,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<CapturePhase>("idle");
   const [status, setStatus] = useState(
-    "Enter Employee ID and tap Authenticate. If not enrolled, select Plant + name in Register UI.",
+    "Enter Employee ID and tap Authenticate. If not enrolled, SDK shows Employee Register or Admin Kiosk Login.",
   );
   const [authResult, setAuthResult] = useState<MendixAuthenticateResult | null>(
     null,
@@ -101,10 +102,20 @@ export function App() {
         return;
       }
 
-      setRegisterResult(outcome.registration);
-      setStatus(
-        `${outcome.registration.message} (requestId: ${outcome.registration.requestId}, status: ${outcome.registration.status})`,
-      );
+      if (outcome.outcome === "registered") {
+        setRegisterResult(outcome.registration);
+        setStatus(
+          `${outcome.registration.message} (requestId: ${outcome.registration.requestId}, status: ${outcome.registration.status})`,
+        );
+        return;
+      }
+
+      if (outcome.outcome === "admin_kiosk_session_completed") {
+        setStatus(
+          "Admin kiosk session ended — workers enrolled at kiosk are ACTIVE immediately.",
+        );
+        return;
+      }
     } catch (error) {
       setAuthResult(null);
       setRegisterResult(null);
@@ -132,8 +143,9 @@ export function App() {
         <p style={styles.eyebrow}>Face Auth · Mendix integration sample</p>
         <h1 style={styles.title}>Host page stand-in</h1>
         <p style={styles.copy}>
-          Mendix: Employee ID + Authenticate. If not enrolled, SDK opens Register UI
-          (Plant + Employee ID + Full name — photo reused from auth).
+          Mendix: Employee ID + Authenticate only. If not enrolled, SDK opens a
+          choice overlay — Employee Register (Path A, pending approval) or Admin
+          Kiosk Login (Path B, plant admin enrolls workers with fresh capture).
         </p>
 
         <form style={styles.form} onSubmit={onAuthenticate}>
@@ -212,6 +224,8 @@ if (outcome.outcome === "authenticated") {
   // Mendix login session
 } else if (outcome.outcome === "registered") {
   // PENDING — wait for admin portal approve
+} else if (outcome.outcome === "admin_kiosk_session_completed") {
+  // Path B — admin finished batch enroll at kiosk
 }`}</pre>
         </section>
       </main>
@@ -228,11 +242,9 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     padding: 24,
     boxSizing: "border-box",
-    fontFamily:
-      'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-    background:
-      "radial-gradient(circle at top left, #e8eef7 0%, #f5f5f0 45%, #ebe6dc 100%)",
-    color: "#1a1a1a",
+    fontFamily: BRAND_DERIVED.fontFamily,
+    background: `radial-gradient(circle at top left, ${BRAND_DERIVED.primaryTint} 0%, ${BRAND.background} 45%, ${BRAND.border} 100%)`,
+    color: BRAND.text,
   },
   card: {
     width: "min(480px, 100%)",
@@ -245,19 +257,21 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     letterSpacing: "0.08em",
     textTransform: "uppercase",
-    color: "#5c6570",
+    color: BRAND.primary,
+    fontWeight: 600,
   },
   title: {
     margin: 0,
     fontSize: 32,
     lineHeight: 1.1,
     fontWeight: 650,
+    color: BRAND.text,
   },
   copy: {
     margin: 0,
     fontSize: 15,
     lineHeight: 1.5,
-    color: "#3d4550",
+    color: BRAND_DERIVED.textMuted,
   },
   form: {
     display: "flex",
@@ -268,17 +282,19 @@ const styles: Record<string, CSSProperties> = {
   label: {
     fontSize: 13,
     fontWeight: 600,
+    color: BRAND.text,
   },
   hint: {
     fontWeight: 400,
-    color: "#5c6570",
+    color: BRAND_DERIVED.textMuted,
   },
   input: {
-    border: "1px solid #c5cad1",
+    border: `1px solid ${BRAND.border}`,
     borderRadius: 8,
     padding: "12px 14px",
     fontSize: 16,
-    background: "#fff",
+    background: BRAND_DERIVED.panel,
+    color: BRAND.text,
   },
   primary: {
     border: "none",
@@ -286,13 +302,13 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 16px",
     fontSize: 15,
     fontWeight: 600,
-    background: "#1f3a5f",
+    background: BRAND.primary,
     color: "#fff",
   },
   meta: {
     margin: 0,
     fontSize: 12,
-    color: "#5c6570",
+    color: BRAND_DERIVED.textMuted,
     wordBreak: "break-all",
   },
   resultBadge: {
@@ -304,9 +320,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
   },
   resultSuccess: {
-    background: "#e6f4ea",
-    border: "1px solid #8fd19e",
-    color: "#0d5724",
+    background: BRAND_DERIVED.primaryTint,
+    border: `1px solid ${BRAND.primary}`,
+    color: BRAND_DERIVED.primaryHover,
   },
   resultDenied: {
     background: "#fdecea",
@@ -314,22 +330,22 @@ const styles: Record<string, CSSProperties> = {
     color: "#8a1f17",
   },
   resultPending: {
-    background: "#fef9e7",
-    border: "1px solid #f0d060",
+    background: BRAND_DERIVED.secondaryTint,
+    border: `1px solid ${BRAND.secondary}`,
     color: "#7a5c00",
   },
   status: {
     margin: 0,
     fontSize: 14,
-    color: "#3d4550",
+    color: BRAND_DERIVED.textMuted,
     minHeight: 40,
   },
   integrationBox: {
     marginTop: 4,
     padding: "12px 14px",
     borderRadius: 8,
-    background: "#f7f8fa",
-    border: "1px solid #d8dde3",
+    background: BRAND.background,
+    border: `1px solid ${BRAND.border}`,
   },
   integrationTitle: {
     margin: "0 0 8px",
@@ -337,7 +353,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
-    color: "#5c6570",
+    color: BRAND_DERIVED.textMuted,
   },
   integrationCode: {
     margin: 0,
@@ -345,6 +361,6 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
     overflowX: "auto",
     fontFamily: "ui-monospace, monospace",
-    color: "#1a1a1a",
+    color: BRAND.text,
   },
 };

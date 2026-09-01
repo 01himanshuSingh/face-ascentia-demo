@@ -13,6 +13,8 @@ export type SdkFeedbackPayload = {
   message: string;
   /** Machine code — auth, register, capture, network, etc. */
   code?: string;
+  /** Short operator guidance shown below the message. */
+  hint?: string;
   details?: SdkFeedbackDetailRow[];
 };
 

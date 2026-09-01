@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 
 import type { CapturePhase } from "../types/auth.types";
+import { BRAND_DERIVED } from "../ui/brandTheme";
 
 export interface CaptureStatusProps {
   phase: CapturePhase;
@@ -39,6 +40,6 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     textAlign: "center",
     fontSize: 15,
-    color: "#e5e7eb",
+    color: BRAND_DERIVED.textMuted,
   },
 };

@@ -3,6 +3,14 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "main": "./dist/face-auth-sdk.js",
+  "module": "./dist/face-auth-sdk.js",
+  "exports": {
+    ".": "./dist/face-auth-sdk.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
