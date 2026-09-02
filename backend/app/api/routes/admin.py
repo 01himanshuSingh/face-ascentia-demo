@@ -71,7 +71,11 @@ def preview_grant_target(
 @router.post(
     "/users/grant",
     response_model=AdminGrantResponse,
-    responses={403: {"model": AdminErrorResponse}, 404: {"model": AdminErrorResponse}},
+    responses={
+        403: {"model": AdminErrorResponse},
+        404: {"model": AdminErrorResponse},
+        409: {"model": AdminErrorResponse},
+    },
 )
 def grant_admin_role(
     body: AdminGrantRequest,

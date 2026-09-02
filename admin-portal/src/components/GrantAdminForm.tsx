@@ -133,6 +133,16 @@ export function GrantAdminForm({
             <p className="mt-1 text-text-muted">
               Plant: {preview.plantName} ({preview.plantCode})
             </p>
+            {!preview.grantEligible ? (
+              <p className="mt-2 text-amber-800">
+                Already an active admin
+                {preview.existingAdminRole
+                  ? ` (${preview.existingAdminRole.replace("_", " ")})`
+                  : ""}
+                . Grant is not allowed — use a different employee or revoke admin
+                access first.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -144,7 +154,7 @@ export function GrantAdminForm({
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete="new-password"
-            disabled={busy}
+            disabled={busy || (previewMatches && !preview.grantEligible)}
             required
           />
         </label>
@@ -157,7 +167,7 @@ export function GrantAdminForm({
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             autoComplete="new-password"
-            disabled={busy}
+            disabled={busy || (previewMatches && !preview.grantEligible)}
             required
           />
           {confirmPassword && password !== confirmPassword ? (

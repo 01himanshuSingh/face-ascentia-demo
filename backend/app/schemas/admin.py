@@ -20,6 +20,7 @@ class AdminErrorCode(StrEnum):
     PLANT_ACCESS_DENIED = "PLANT_ACCESS_DENIED"
     PERMISSION_DENIED = "PERMISSION_DENIED"
     EMPLOYEE_NOT_FOUND = "EMPLOYEE_NOT_FOUND"
+    ADMIN_ALREADY_EXISTS = "ADMIN_ALREADY_EXISTS"
     MISSING_DECISION_REASON = "MISSING_DECISION_REASON"
 
 
@@ -94,6 +95,11 @@ class AdminGrantPreviewResponse(BaseModel):
     plant_code: str = Field(..., serialization_alias="plantCode")
     plant_name: str = Field(..., serialization_alias="plantName")
     grant_eligible: bool = Field(..., serialization_alias="grantEligible")
+    existing_admin_role: str | None = Field(
+        default=None,
+        serialization_alias="existingAdminRole",
+        description="Set when employee already has an active admin_roles row.",
+    )
 
 
 class AdminGrantResponse(BaseModel):

@@ -46,6 +46,17 @@ def _resolve_grant_plant_id(
     return effective
 
 
+def _assert_not_already_active_admin(db: Session, employee_id: str) -> None:
+    """Block grant when employee already has an active admin_roles row."""
+    existing = admin_role_repository.get_active_by_employee_id(db, employee_id)
+    if existing is not None:
+        raise AdminError(
+            f"Employee '{employee_id}' is already an active admin ({existing.role}).",
+            code=AdminErrorCode.ADMIN_ALREADY_EXISTS,
+            http_status=409,
+        )
+
+
 class AdminGrantService:
     def preview_grant_target(
         self,
@@ -74,6 +85,7 @@ class AdminGrantService:
 
         assert_can_manage_plant(session, employee.plant_id)
 
+        existing_admin = admin_role_repository.get_active_by_employee_id(db, normalized_id)
         plant = employee.plant
         return AdminGrantPreviewResponse(
             employee_id=employee.employee_id,
@@ -81,7 +93,8 @@ class AdminGrantService:
             plant_id=employee.plant_id,
             plant_code=plant.plant_code,
             plant_name=plant.plant_name,
-            grant_eligible=True,
+            grant_eligible=existing_admin is None,
+            existing_admin_role=existing_admin.role if existing_admin else None,
         )
 
     def grant_role(
@@ -128,31 +141,22 @@ class AdminGrantService:
             target_plant_id=effective_plant_id,
         )
 
-        existing = admin_role_repository.get_by_employee_id(db, normalized_id)
+        _assert_not_already_active_admin(db, normalized_id)
+
         password_hash = AdminAuthService.hash_password(password)
 
-        if existing is None:
-            admin_row = AdminRole(
-                employee_id=normalized_id,
-                plant_id=effective_plant_id,
-                role=role.value,
-                password_hash=password_hash,
-                is_active=True,
-                granted_by=session.employee_id,
-            )
-            db.add(admin_row)
-            db.flush()
-            db.refresh(admin_row)
-            assign_default_permissions(db, role_id=admin_row.role_id, role=role)
-        else:
-            admin_row = existing
-            admin_row.plant_id = effective_plant_id
-            admin_row.role = role.value
-            admin_row.password_hash = password_hash
-            admin_row.is_active = True
-            admin_row.granted_by = session.employee_id
-            admin_role_repository.clear_permissions(db, admin_row.role_id)
-            assign_default_permissions(db, role_id=admin_row.role_id, role=role)
+        admin_row = AdminRole(
+            employee_id=normalized_id,
+            plant_id=effective_plant_id,
+            role=role.value,
+            password_hash=password_hash,
+            is_active=True,
+            granted_by=session.employee_id,
+        )
+        db.add(admin_row)
+        db.flush()
+        db.refresh(admin_row)
+        assign_default_permissions(db, role_id=admin_row.role_id, role=role)
 
         audit_repository.create_entry(
             db,

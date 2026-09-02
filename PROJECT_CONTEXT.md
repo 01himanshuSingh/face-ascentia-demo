@@ -387,7 +387,7 @@ Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
 | Area | Status |
 |------|--------|
 | Admin Portal React UI | **Done** — see 2026-08-31 section |
-| Admin Portal grant PLANT_ADMIN UI | API done; SUPER_ADMIN UI pending |
+| Admin Portal grant PLANT_ADMIN UI | **Done (2026-09-02)** — see 2026-09-02 section |
 | SDK Not Enrolled two-button overlay | **Done (2026-09-01)** |
 | Path B — `/kiosk/admin-login`, `/kiosk/admin-enroll`, `/kiosk/admin-logout` | **Done (2026-09-01)** |
 | Android kiosk capture profile (camera + blink) | Not built — field testing blocked blink smoothness |
@@ -411,7 +411,7 @@ Approve → employees row + ACTIVE enrollment   |   Reject → reason + audit
 | Admin RBAC catalog | `admin_permissions`, `admin_role_permissions` models | Done |
 | Migrations | `20260831_0006_admin_permissions_rbac`, `20260831_0007_v1_plant_admin_registration_only` | Done |
 | v1 roles | `SUPER_ADMIN` (all plants) + `PLANT_ADMIN` (one plant); `SUB_ADMIN` deferred | Done |
-| Grant API | `POST /admin/users/grant` — SUPER_ADMIN grants PLANT_ADMIN | Done |
+| Grant API | `POST /admin/users/grant` — SUPER + PLANT_ADMIN (own plant); plant from `employees.plant_id` | Done |
 | Permission checks on review | `admin_rbac.py`, `admin_grant.py`; approve/reject gated | Done |
 | Dev seeds | `seed_super_admin.py`, `seed_admin.py` (Path A flow; no worker pre-seed) | Done |
 
@@ -505,7 +505,7 @@ Implement **device profiles** so desktop behavior stays the same while Android k
 |-------|--------|
 | Desktop Chrome + USB webcam kiosk | **Works** — primary dev target |
 | Android box / mobile browser kiosk | **Partial** — HTTP/WebView fixed; blink/capture profile **pending** |
-| Admin Portal grant PLANT_ADMIN UI | API done (`POST /admin/users/grant`); SUPER_ADMIN UI **not built** |
+| Admin Portal grant PLANT_ADMIN UI | **Done (2026-09-02)** — M6–M8 + employee-derived plant + block re-grant |
 | Path B kiosk admin batch | **Done (2026-09-01)** |
 | SDK STATE 3 two-button overlay | **Done (2026-09-01)** |
 | Mendix npm package publish | Build ready; Mendix integration pending |
@@ -515,7 +515,7 @@ Implement **device profiles** so desktop behavior stays the same while Android k
 1. ~~Retest Android kiosk~~ — ongoing with ngrok + `/api` proxy
 2. **SDK capture profiles** for Android kiosk — blink + face smoothness (**still pending**)
 3. ~~SDK Not Enrolled two-button overlay~~ — **done 2026-09-01**
-4. Admin Portal **grant PLANT_ADMIN** UI (SUPER_ADMIN only) — **still pending**
+4. ~~Admin Portal **grant PLANT_ADMIN** UI~~ — **done 2026-09-02**
 5. ~~Path B `/kiosk/admin-*`~~ — **done 2026-09-01**
 6. Mendix SDK npm package handoff + client Debian backend deploy — **packaging ready; Mendix integration pending**
 
@@ -657,18 +657,71 @@ Workers are **not** pre-seeded — enroll via test harness Path A (register → 
 | Path B kiosk admin batch enroll | **Done** |
 | SDK STATE 3–5 overlays | **Done** |
 | Enrollment face preview | **Done** (SDK-only, enrollment flows) |
-| Admin Portal grant PLANT_ADMIN UI | API done; SUPER_ADMIN UI **not built** |
+| Admin Portal grant PLANT_ADMIN UI | **Done (2026-09-02)** — M6–M8 + employee-derived plant + block re-grant |
 | Mendix npm package publish | Build + `npm pack` ready; Mendix integration **pending** |
-| `AGENTS.md` | May still say Path B / STATE 3–5 pending — update when convenient |
+| `AGENTS.md` | Update grant/RBAC rows to match 2026-09-02 (portal grant UI done) |
 
-### Next steps (current priority)
+## Work completed 2026-09-02 — Admin grant RBAC, portal M6–M8, employee-derived plant
 
-1. **Retest end-to-end** Path A + Path B on desktop and Android ngrok kiosk after fresh DB reset
-2. **SDK capture profiles** for Android kiosk — blink + camera smoothness (see 2026-08-31 section)
-3. Admin Portal **grant PLANT_ADMIN** UI (SUPER_ADMIN only)
-4. Mendix SDK `.tgz` handoff + integration on client kiosk
-5. Backend pytest for `/kiosk/admin-*` routes
-6. Sync `AGENTS.md` status table with Path B / STATE 3–5 completion
+Plant admins can grant `PLANT_ADMIN` within their own plant. Admin Portal grant UI (M6–M8) shipped. Grant plant is derived from the worker row (not a SUPER plant picker). Active admins cannot be granted again.
+
+### Backend — RBAC + grant policy
+
+| Area | Change | Status |
+|------|--------|--------|
+| `backend/app/common/enums.py` | `ADMIN_GRANT_PLANT_ADMIN` in PLANT_ADMIN default permissions | Done |
+| `backend/app/services/admin_rbac.py` | `assert_can_manage_plant()` on grant; plant scope for PLANT_ADMIN | Done |
+| Migration `20260831_0008` | Backfill `ADMIN_GRANT_PLANT_ADMIN` on existing PLANT_ADMIN rows | Done |
+| `backend/app/services/admin_grant.py` | Plant from `employees.plant_id`; no client plant override | Done |
+| `GET /admin/users/grant-preview/{employeeId}` | Resolve worker + plant before grant | Done |
+| `POST /admin/users/grant` | Block re-grant if active admin (`ADMIN_ALREADY_EXISTS` 409) | Done |
+| `AdminErrorCode.ADMIN_ALREADY_EXISTS` | `backend/app/schemas/admin.py` | Done |
+
+**Grant invariants (v1):**
+- Worker-first: target must exist in `employees` (enrolled worker).
+- `admin_roles.plant_id` always copied from `employees.plant_id` — granter cannot pick a different plant.
+- SUPER may grant any enrolled employee; PLANT_ADMIN only when `employees.plant_id == session.plant_id`.
+- Permissions at runtime from `admin_role_permissions` (DB); enums + migration seed defaults only.
+- Active admin rows cannot be re-granted (no password reset via grant API).
+
+### Admin Portal — grant UI (M6–M8)
+
+| Module | Files | Status |
+|--------|-------|--------|
+| M6 Grant PLANT_ADMIN | `GrantAdminForm.tsx`, `useGrantAdmin.ts`, `adminApi.ts` | Done |
+| M7 Plant resolution | Employee lookup + read-only plant (removed SUPER plant dropdown) | Done |
+| M8 Tabs | `App.tsx` — Review \| Grant Admin for SUPER + PLANT_ADMIN | Done |
+
+**Portal grant flow:** Employee ID → blur → preview (`grant-preview`) → name + plant card → password → `POST /admin/users/grant` (no `plantId` in body).
+
+### Local SQL testing (standalone)
+
+| File | Purpose |
+|------|---------|
+| `local-sql-test-queries.sql` | Read-only PostgreSQL test queries at repo root — not wired to app |
+
+### Alembic head
+
+`20260831_0008` (after `0007` PLANT_ADMIN registration-only cleanup)
+
+### Manual test checklist (grant)
+
+```text
+1. alembic upgrade head (0008)
+2. Re-login ADMIN001 → Grant tab visible
+3. Lookup enrolled worker (not already admin) → preview shows plant → grant succeeds
+4. Lookup ADMIN001 → preview grantEligible=false / grant returns 409
+5. SUPER001 → can grant worker in any plant; plant still from employee row
+```
+
+### Next steps (after 2026-09-02)
+
+1. Update `AGENTS.md` grant policy + M6–M8 status
+2. Mendix SDK `.tgz` handoff + integration
+3. SDK capture profiles for Android kiosk
+4. Production: rate limit login/auth, deploy runbook, optional Redis sessions
+5. Backend pytest for grant + kiosk admin routes
+6. Future: dynamic RBAC UI (edit `admin_role_permissions`), audit read API
 
 ## Technology Stack
 

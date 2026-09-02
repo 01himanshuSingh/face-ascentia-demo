@@ -45,6 +45,7 @@ export type AdminGrantPreview = {
   plantCode: string;
   plantName: string;
   grantEligible: boolean;
+  existingAdminRole: string | null;
 };
 
 export type RegistrationQueueItem = {
