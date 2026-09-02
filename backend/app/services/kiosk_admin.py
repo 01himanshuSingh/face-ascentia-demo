@@ -94,10 +94,6 @@ _ENROLL_SUCCESS_MESSAGE = (
     "Employee enrolled successfully. They may authenticate with face login now."
 )
 
-# v1: provisional display name when HR full_name is not collected at kiosk enroll.
-_KIOSK_ENROLL_NAME_PREFIX = "Kiosk enroll"
-
-
 class KioskAdminService:
     """
     Path B business logic — admin operator enrolls target workers at kiosk.
@@ -194,6 +190,7 @@ class KioskAdminService:
         session: AdminSession,
         *,
         employee_id: str,
+        full_name: str,
         image_bytes: bytes,
         content_type: str | None = None,
         kiosk_id: str | None = None,
@@ -208,6 +205,7 @@ class KioskAdminService:
         assert_permission(session, AdminPermissionCode.REGISTRATION_APPROVE)
 
         normalized_id = self._normalize_target_employee_id(employee_id)
+        submitted_name = self._normalize_full_name(full_name)
         self._validate_image_payload(image_bytes, content_type)
         self._assert_worker_eligible(
             db,
@@ -223,8 +221,6 @@ class KioskAdminService:
             employee_id=normalized_id,
             live_embedding=live,
         )
-
-        submitted_name = self._provisional_full_name(normalized_id)
 
         try:
             request = registration_repository.create_admin_kiosk_approved(
@@ -250,6 +246,8 @@ class KioskAdminService:
                     plant_id=plant_id,
                     full_name=submitted_name,
                 )
+            else:
+                employee.full_name = submitted_name
 
             enrollment_repository.create_active(
                 db,
@@ -351,9 +349,15 @@ class KioskAdminService:
         return normalized
 
     @staticmethod
-    def _provisional_full_name(employee_id: str) -> str:
-        """v1 placeholder until optional full_name is added to kiosk enroll contract."""
-        return f"{_KIOSK_ENROLL_NAME_PREFIX}: {employee_id}"
+    def _normalize_full_name(full_name: str) -> str:
+        normalized = (full_name or "").strip()
+        if not normalized:
+            raise KioskAdminError(
+                "full_name is required.",
+                code=KioskAdminErrorCode.MISSING_FULL_NAME,
+                http_status=400,
+            )
+        return normalized
 
     def _assert_worker_eligible(
         self,

@@ -5,7 +5,7 @@ System design
 -------------
 Thin transport layer only:
   - JSON login / logout
-  - Multipart worker enroll (employee_id + image)
+  - Multipart worker enroll (employee_id + full_name + image)
   - Session header on protected routes
 
 Business rules live in KioskAdminService — not here.
@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.schemas.kiosk_admin import (
     KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD,
+    KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD,
     KIOSK_ADMIN_ENROLL_IMAGE_FIELD,
     KIOSK_ADMIN_ENROLL_KIOSK_ID_FIELD,
     KIOSK_ADMIN_ENROLL_SESSION_ID_FIELD,
@@ -112,6 +113,7 @@ def kiosk_admin_login(
 )
 async def kiosk_admin_enroll(
     employee_id: Annotated[str, Form(alias=KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD)],
+    full_name: Annotated[str, Form(alias=KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD)],
     image: Annotated[UploadFile, File(alias=KIOSK_ADMIN_ENROLL_IMAGE_FIELD)],
     kiosk_id: Annotated[
         str | None,
@@ -138,6 +140,7 @@ async def kiosk_admin_enroll(
         db,
         session,
         employee_id=employee_id,
+        full_name=full_name,
         image_bytes=image_bytes,
         content_type=image.content_type,
         kiosk_id=kiosk_id,

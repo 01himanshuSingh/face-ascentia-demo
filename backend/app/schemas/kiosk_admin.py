@@ -12,7 +12,7 @@ System design boundary
   SDK holds admin_session_token in memory (short-lived kiosk session)
         ↓  repeat per joiner
   Admin enters **target worker** employee_id + **fresh** camera capture
-        ↓  POST /kiosk/admin-enroll  (multipart: employee_id + image only)
+        ↓  POST /kiosk/admin-enroll  (multipart: employee_id + full_name + image)
   Backend → registration_requests APPROVED, source=ADMIN_KIOSK
             employees + enrollments ACTIVE immediately (no Admin Portal queue)
 
@@ -47,7 +47,7 @@ Non-negotiable rules (enforced in KioskAdminService, documented here)
 Transport
 ---------
   POST /kiosk/admin-login     application/json
-  POST /kiosk/admin-enroll    multipart/form-data (employee_id + image)
+  POST /kiosk/admin-enroll    multipart/form-data (employee_id + full_name + image)
   POST /kiosk/admin-logout    header: X-Admin-Session-Token
 
   Reuses AdminAuthService session store and header name as Admin Portal for
@@ -91,6 +91,7 @@ KIOSK_ADMIN_SESSION_HEADER = "X-Admin-Session-Token"
 
 # Multipart form keys for POST /kiosk/admin-enroll (v1).
 KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD = "employee_id"
+KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD = "full_name"
 KIOSK_ADMIN_ENROLL_IMAGE_FIELD = "image"
 
 # Deferred — fleet registry not wired in current rollout.
@@ -116,6 +117,7 @@ class KioskAdminErrorCode(StrEnum):
     KIOSK_PLANT_REQUIRED = "KIOSK_PLANT_REQUIRED"
     PLANT_ACCESS_DENIED = "PLANT_ACCESS_DENIED"
     MISSING_EMPLOYEE_ID = "MISSING_EMPLOYEE_ID"
+    MISSING_FULL_NAME = "MISSING_FULL_NAME"
     EMPLOYEE_INACTIVE = "EMPLOYEE_INACTIVE"
     ALREADY_ENROLLED = "ALREADY_ENROLLED"
     PENDING_REGISTRATION_EXISTS = "PENDING_REGISTRATION_EXISTS"
@@ -280,8 +282,7 @@ class KioskAdminEnrollFormFields(BaseModel):
 
     **plant_id is intentionally absent** — server assigns plant from session.
 
-    full_name is intentionally absent in v1 — service policy for new employees
-    is defined in KioskAdminService (e.g. employee must exist or name derived).
+    full_name is required in v1 — admin enters worker display name at kiosk.
 
     FastAPI binds via Form()/File() in the route — this model is the contract
     reference for OpenAPI + SDK, not the UploadFile wrapper itself.
@@ -290,6 +291,7 @@ class KioskAdminEnrollFormFields(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     employee_id_field: Literal["employee_id"] = KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD
+    full_name_field: Literal["full_name"] = KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD
     image_field: Literal["image"] = KIOSK_ADMIN_ENROLL_IMAGE_FIELD
     kiosk_id_field: Literal["kiosk_id"] = KIOSK_ADMIN_ENROLL_KIOSK_ID_FIELD
     session_id_field: Literal["session_id"] = KIOSK_ADMIN_ENROLL_SESSION_ID_FIELD

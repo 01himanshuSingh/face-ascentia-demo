@@ -3,6 +3,11 @@ import { useState, type CSSProperties, type FormEvent, type ReactElement } from 
 import type { KioskAdminSession } from "../types/kioskAdmin.types";
 import { BRAND, BRAND_DERIVED, overlayShellStyles } from "../ui/brandTheme";
 
+export interface AdminEnrollSubmitPayload {
+  employeeId: string;
+  fullName: string;
+}
+
 export interface AdminEnrollLoopOverlayProps {
   open: boolean;
   session: KioskAdminSession;
@@ -10,7 +15,7 @@ export interface AdminEnrollLoopOverlayProps {
   errorMessage?: string | null;
   /** Shown after a successful enroll — cleared on next attempt. */
   lastEnrolledEmployeeId?: string | null;
-  onEnrollNext: (targetEmployeeId: string) => void;
+  onEnrollNext: (payload: AdminEnrollSubmitPayload) => void;
   onEndSession: () => void;
 }
 
@@ -35,21 +40,34 @@ export function AdminEnrollLoopOverlay({
   onEndSession,
 }: AdminEnrollLoopOverlayProps): ReactElement | null {
   const [targetEmployeeId, setTargetEmployeeId] = useState("");
-  const [focusedField, setFocusedField] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   if (!open) {
     return null;
   }
 
-  const canEnroll = targetEmployeeId.trim().length > 0 && !busy;
+  const canEnroll =
+    targetEmployeeId.trim().length > 0 &&
+    fullName.trim().length > 0 &&
+    !busy;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (!canEnroll) {
       return;
     }
-    onEnrollNext(targetEmployeeId.trim());
+    onEnrollNext({
+      employeeId: targetEmployeeId.trim(),
+      fullName: fullName.trim(),
+    });
   };
+
+  const inputStyle = (field: string): CSSProperties => ({
+    ...styles.input,
+    ...(focusedField === field ? styles.inputFocused : {}),
+    ...(busy ? styles.inputDisabled : {}),
+  });
 
   return (
     <div
@@ -69,8 +87,8 @@ export function AdminEnrollLoopOverlay({
         </header>
 
         <p style={styles.subtitle}>
-          Enter a worker Employee ID, then capture a fresh face photo. Each
-          enrollment is active immediately under your plant scope.
+          Enter the worker Employee ID and full name, then capture a fresh face
+          photo. Each enrollment is active immediately under your plant scope.
         </p>
 
         <div style={styles.contextCard} aria-label="Admin session context">
@@ -101,14 +119,32 @@ export function AdminEnrollLoopOverlay({
               type="text"
               value={targetEmployeeId}
               disabled={busy}
-              style={{
-                ...styles.input,
-                ...(focusedField ? styles.inputFocused : {}),
-                ...(busy ? styles.inputDisabled : {}),
-              }}
-              onFocus={() => setFocusedField(true)}
-              onBlur={() => setFocusedField(false)}
+              style={inputStyle("employeeId")}
+              onFocus={() => setFocusedField("employeeId")}
+              onBlur={() => setFocusedField(null)}
               onChange={(event) => setTargetEmployeeId(event.target.value)}
+              placeholder="Employee ID"
+              autoComplete="off"
+              required
+            />
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label} htmlFor="face-auth-enroll-full-name">
+              Full name
+            </label>
+            <input
+              id="face-auth-enroll-full-name"
+              type="text"
+              value={fullName}
+              disabled={busy}
+              style={inputStyle("fullName")}
+              onFocus={() => setFocusedField("fullName")}
+              onBlur={() => setFocusedField(null)}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Full name"
+              autoComplete="name"
+              required
             />
           </div>
 

@@ -22,7 +22,7 @@
  * Rules (v1)
  * ----------
  * - Admin login: operator employeeId + password (admin_roles — not face).
- * - Enroll: target worker employeeId + fresh JPEG only — no plantId in body.
+ * - Enroll: target worker employeeId + fullName + fresh JPEG — no plantId in body.
  * - plantId on enroll response comes from admin session (server authoritative).
  * - Does NOT grant admin roles — workers only.
  * - kioskId / sessionId on enroll are optional and omitted in current rollout.
@@ -58,6 +58,7 @@ export const KIOSK_ADMIN_LOGIN_PASSWORD_JSON = "password" as const;
 
 /** Multipart form keys for POST /kiosk/admin-enroll (v1). */
 export const KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD = "employee_id" as const;
+export const KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD = "full_name" as const;
 export const KIOSK_ADMIN_ENROLL_IMAGE_FIELD = "image" as const;
 
 /** Deferred — fleet registry not wired; omit in v1 SDK calls. */
@@ -79,6 +80,7 @@ export const KioskAdminErrorCode = {
   KIOSK_PLANT_REQUIRED: "KIOSK_PLANT_REQUIRED",
   PLANT_ACCESS_DENIED: "PLANT_ACCESS_DENIED",
   MISSING_EMPLOYEE_ID: "MISSING_EMPLOYEE_ID",
+  MISSING_FULL_NAME: "MISSING_FULL_NAME",
   EMPLOYEE_INACTIVE: "EMPLOYEE_INACTIVE",
   ALREADY_ENROLLED: "ALREADY_ENROLLED",
   PENDING_REGISTRATION_EXISTS: "PENDING_REGISTRATION_EXISTS",
@@ -163,6 +165,8 @@ export interface KioskAdminSession {
 export interface KioskAdminEnrollRequest {
   /** Target worker Employee ID (not the admin operator). */
   employeeId: string;
+  /** Worker display name — stored on employees + registration_requests. */
+  fullName: string;
   image: FaceCaptureResult | Blob;
   filename?: string;
   /** Optional — omitted in current rollout. */

@@ -254,6 +254,11 @@ const KIOSK_ADMIN_ERROR_COPY: Partial<Record<string, ErrorCopy>> = {
     message: "Enter the worker Employee ID before capturing.",
     variant: "warning",
   },
+  [KioskAdminErrorCode.MISSING_FULL_NAME]: {
+    title: "Full name required",
+    message: "Enter the worker full name before capturing.",
+    variant: "warning",
+  },
   [KioskAdminErrorCode.EMPLOYEE_INACTIVE]: {
     title: "Worker inactive",
     message: "This worker is marked inactive and cannot be enrolled.",

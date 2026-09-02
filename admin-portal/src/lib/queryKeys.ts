@@ -5,4 +5,7 @@ export const adminQueryKeys = {
     [...adminQueryKeys.all, "pending", sessionToken] as const,
   registrationImage: (sessionToken: string, requestId: string) =>
     [...adminQueryKeys.all, "registration-image", sessionToken, requestId] as const,
+  plants: () => [...adminQueryKeys.all, "plants"] as const,
+  grantPreview: (sessionToken: string, employeeId: string) =>
+    [...adminQueryKeys.all, "grant-preview", sessionToken, employeeId] as const,
 };

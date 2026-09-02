@@ -9,6 +9,7 @@ import {
 } from "../api/FaceAuthClient";
 import type { CameraStartOptions } from "../camera/camera.types";
 import { AdminEnrollLoopOverlay } from "../components/AdminEnrollLoopOverlay";
+import type { AdminEnrollSubmitPayload } from "../components/AdminEnrollLoopOverlay";
 import {
   AdminKioskLoginOverlay,
   type AdminKioskLoginSubmitPayload,
@@ -607,10 +608,15 @@ export class FaceAuthSDK {
     this.render();
   }
 
-  private async handleAdminEnrollNext(targetEmployeeId: string): Promise<void> {
+  private async handleAdminEnrollNext(
+    payload: AdminEnrollSubmitPayload,
+  ): Promise<void> {
     if (!this.adminSession) {
       return;
     }
+
+    const targetEmployeeId = payload.employeeId.trim();
+    const fullName = payload.fullName.trim();
 
     this.adminEnrollTargetId = targetEmployeeId;
     this.adminEnrollBusy = true;
@@ -623,12 +629,13 @@ export class FaceAuthSDK {
       const frame = await this.startCapturePipeline();
       await this.showEnrollmentPreview(frame, {
         caption: "Face captured",
-        subtitle: `Enrolling ${targetEmployeeId.trim()}…`,
+        subtitle: `Enrolling ${fullName} (${targetEmployeeId})…`,
       });
       const result = await this.getAuthClient().kioskAdminEnroll(
         this.adminSession.adminSessionToken,
         {
           employeeId: targetEmployeeId,
+          fullName,
           image: frame,
           sessionId: this.createSessionId(),
         },
@@ -933,8 +940,8 @@ export class FaceAuthSDK {
           busy: this.adminEnrollBusy,
           errorMessage: this.adminEnrollError,
           lastEnrolledEmployeeId: this.adminLastEnrolledId,
-          onEnrollNext: (targetEmployeeId) => {
-            void this.handleAdminEnrollNext(targetEmployeeId);
+          onEnrollNext: (enrollPayload) => {
+            void this.handleAdminEnrollNext(enrollPayload);
           },
           onEndSession: () => {
             void this.handleAdminEndSession();

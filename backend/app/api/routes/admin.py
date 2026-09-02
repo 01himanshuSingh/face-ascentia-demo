@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.schemas.admin import (
     AdminErrorResponse,
+    AdminGrantPreviewResponse,
     AdminGrantRequest,
     AdminGrantResponse,
     AdminLoginRequest,
@@ -47,6 +48,23 @@ def admin_login(
         db,
         employee_id=body.employee_id,
         password=body.password,
+    )
+
+
+@router.get(
+    "/users/grant-preview/{employee_id}",
+    response_model=AdminGrantPreviewResponse,
+    responses={403: {"model": AdminErrorResponse}, 404: {"model": AdminErrorResponse}},
+)
+def preview_grant_target(
+    employee_id: str,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(get_admin_session),
+) -> AdminGrantPreviewResponse:
+    return get_shared_admin_grant_service().preview_grant_target(
+        db,
+        session,
+        employee_id=employee_id,
     )
 
 

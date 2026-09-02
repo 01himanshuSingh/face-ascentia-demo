@@ -99,6 +99,7 @@ export {
 export {
   AdminEnrollLoopOverlay,
   type AdminEnrollLoopOverlayProps,
+  type AdminEnrollSubmitPayload,
 } from "./components/AdminEnrollLoopOverlay";
 export {
   AdminKioskLoginOverlay,

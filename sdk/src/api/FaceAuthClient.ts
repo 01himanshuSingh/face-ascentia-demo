@@ -66,6 +66,7 @@ import type {
 } from "../types/kioskAdmin.types";
 import {
   KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD,
+  KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD,
   KIOSK_ADMIN_ENROLL_IMAGE_FIELD,
   KIOSK_ADMIN_ENROLL_KIOSK_ID_FIELD,
   KIOSK_ADMIN_ENROLL_PATH,
@@ -414,6 +415,15 @@ export class FaceAuthClient {
     }
 
     const employeeId = request.employeeId.trim();
+    const fullName = request.fullName.trim();
+    if (!fullName) {
+      throw new FaceAuthApiError("full_name is required.", {
+        httpStatus: 0,
+        code: "MISSING_FULL_NAME",
+        detail: "Worker full name is required for kiosk enroll.",
+      });
+    }
+
     const { blob, filename } = this.resolveImagePayload(
       request.image,
       request.filename,
@@ -421,6 +431,7 @@ export class FaceAuthClient {
 
     const form = new FormData();
     form.append(KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD, employeeId);
+    form.append(KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD, fullName);
     form.append(KIOSK_ADMIN_ENROLL_IMAGE_FIELD, blob, filename);
 
     const kioskId = request.kioskId?.trim();

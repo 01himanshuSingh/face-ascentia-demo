@@ -1,4 +1,19 @@
-"""Admin RBAC — v1: SUPER_ADMIN + PLANT_ADMIN only (SUB_ADMIN deferred)."""
+"""Admin RBAC enforcement — v1 policy layer.
+
+Single place for permission and plant-scope checks used by Admin Portal and
+grant API. Default permission sets live in ``app.common.enums``; effective
+grants are rows in ``admin_role_permissions`` (future SUPER UI may edit those).
+
+v1 active roles: SUPER_ADMIN, PLANT_ADMIN (SUB_ADMIN reserved, not grantable).
+
+Grant policy (``POST /admin/users/grant``):
+  - Same permission ``ADMIN_GRANT_PLANT_ADMIN`` for SUPER and PLANT admin.
+  - ``admin_roles.plant_id`` is derived from ``employees.plant_id`` (not chosen).
+  - SUPER_ADMIN may grant any enrolled employee (any plant).
+  - PLANT_ADMIN may grant only when ``employees.plant_id == session.plant_id``.
+
+Registration review uses ``assert_can_manage_plant`` + registration permissions.
+"""
 
 from __future__ import annotations
 
@@ -51,7 +66,11 @@ def assert_permission(session: AdminSession, code: AdminPermissionCode) -> None:
 
 
 def assert_can_manage_plant(session: AdminSession, plant_id: uuid.UUID) -> None:
-    """SUPER_ADMIN: all plants. PLANT_ADMIN: own plant only."""
+    """Enforce plant workspace boundary for the current session.
+
+    SUPER_ADMIN bypasses (all plants). PLANT_ADMIN must match ``session.plant_id``.
+    Used for registration review, image access, approve/reject, and grant targets.
+    """
     if session.role == AdminRoleType.SUPER_ADMIN.value:
         return
     if session.plant_id != plant_id:
@@ -68,6 +87,14 @@ def assert_can_grant_role(
     target_role: AdminRoleType,
     target_plant_id: uuid.UUID | None,
 ) -> None:
+    """Authorize granter for ``POST /admin/users/grant``.
+
+    Two-step gate for PLANT_ADMIN grants:
+      1. Permission — ``ADMIN_GRANT_PLANT_ADMIN`` on session.
+      2. Plant scope — granter may only assign within plants they manage.
+
+    SUPER_ADMIN cannot be granted via API. SUB_ADMIN is catalog-only in v1.
+    """
     if target_role == AdminRoleType.SUB_ADMIN:
         raise AdminError(
             "SUB_ADMIN is not enabled in v1. Use PLANT_ADMIN per plant.",
@@ -97,6 +124,7 @@ def assert_can_grant_role(
                 code=AdminErrorCode.PLANT_ACCESS_DENIED,
                 http_status=400,
             )
+        assert_can_manage_plant(session, target_plant_id)
         return
 
     raise AdminError(

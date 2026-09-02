@@ -7,8 +7,8 @@
  *   GET  /admin/registrations/{id}/image       (X-Admin-Session-Token)
  *   POST /admin/registrations/{id}/approve     (X-Admin-Session-Token)
  *   POST /admin/registrations/{id}/reject      (X-Admin-Session-Token)
- *
- * Session: in-memory token returned by login; persisted in sessionStorage
+ *   POST /admin/users/grant                    (X-Admin-Session-Token)
+ *   GET  /admin/users/grant-preview/{employeeId}  (resolve plant from employee)
  * so a refresh keeps the desk admin signed in until the tab closes.
  *
  * Plant scoping is enforced by the backend — this client never filters
@@ -30,6 +30,23 @@ export type AdminSession = {
   expiresAt: string;
 };
 
+/** UI gate for Grant tab — backend enforces permission + plant scope on grant. */
+export function canGrantPlantAdmin(session: AdminSession): boolean {
+  return (
+    session.role === "SUPER_ADMIN" ||
+    (session.role === "PLANT_ADMIN" && session.plantId != null)
+  );
+}
+
+export type AdminGrantPreview = {
+  employeeId: string;
+  fullName: string;
+  plantId: string;
+  plantCode: string;
+  plantName: string;
+  grantEligible: boolean;
+};
+
 export type RegistrationQueueItem = {
   requestId: string;
   employeeId: string;
@@ -47,6 +64,24 @@ export type RegistrationDecision = {
   employeeId: string;
   status: string;
   message: string;
+};
+
+export type PlantListItem = {
+  plantId: string;
+  plantCode: string;
+  plantName: string;
+};
+
+export type AdminGrantResult = {
+  employeeId: string;
+  role: string;
+  plantId: string | null;
+  message: string;
+};
+
+export type AdminGrantPayload = {
+  employeeId: string;
+  password: string;
 };
 
 export type AdminApiError = {
@@ -244,6 +279,64 @@ export async function rejectRegistration(
     {
       method: "POST",
       body: JSON.stringify({ reason: trimmed }),
+    },
+    token,
+  );
+}
+
+/** GET /admin/users/grant-preview/{employeeId} — plant derived from employee row. */
+export async function previewGrantTarget(
+  token: string,
+  employeeId: string,
+): Promise<AdminGrantPreview> {
+  const normalized = employeeId.trim();
+  if (!normalized) {
+    throw new AdminApiClientError(
+      {
+        detail: "Employee ID is required.",
+        code: "INVALID_CREDENTIALS",
+      },
+      400,
+    );
+  }
+
+  return requestJson<AdminGrantPreview>(
+    `/admin/users/grant-preview/${encodeURIComponent(normalized)}`,
+    { method: "GET" },
+    token,
+  );
+}
+
+/**
+ * POST /admin/users/grant — grant PLANT_ADMIN to an existing employee.
+ * Plant is derived server-side from employees.plant_id (omit plantId).
+ */
+export async function grantPlantAdmin(
+  token: string,
+  payload: AdminGrantPayload,
+): Promise<AdminGrantResult> {
+  const employeeId = payload.employeeId.trim();
+  const password = payload.password;
+
+  if (!employeeId || !password) {
+    throw new AdminApiClientError(
+      {
+        detail: "Employee ID and password are required.",
+        code: "INVALID_CREDENTIALS",
+      },
+      400,
+    );
+  }
+
+  return requestJson<AdminGrantResult>(
+    "/admin/users/grant",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        employeeId,
+        role: "PLANT_ADMIN",
+        password,
+      }),
     },
     token,
   );

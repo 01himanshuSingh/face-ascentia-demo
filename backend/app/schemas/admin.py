@@ -72,8 +72,28 @@ class AdminGrantRequest(BaseModel):
 
     employee_id: str = Field(..., validation_alias="employeeId")
     role: str = Field(..., description="PLANT_ADMIN or SUB_ADMIN")
-    plant_id: UUID | None = Field(default=None, validation_alias="plantId")
+    plant_id: UUID | None = Field(
+        default=None,
+        validation_alias="plantId",
+        description=(
+            "Deprecated — omit. PLANT_ADMIN plant is always derived from "
+            "employees.plant_id (worker-first)."
+        ),
+    )
     password: str
+
+
+class AdminGrantPreviewResponse(BaseModel):
+    """Resolved grant target — plant comes from employee, not the grant form."""
+
+    model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
+
+    employee_id: str = Field(..., serialization_alias="employeeId")
+    full_name: str = Field(..., serialization_alias="fullName")
+    plant_id: UUID = Field(..., serialization_alias="plantId")
+    plant_code: str = Field(..., serialization_alias="plantCode")
+    plant_name: str = Field(..., serialization_alias="plantName")
+    grant_eligible: bool = Field(..., serialization_alias="grantEligible")
 
 
 class AdminGrantResponse(BaseModel):
