@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   grantPlantAdmin,
-  isAdminApiError,
   previewGrantTarget,
   type AdminGrantPayload,
   type AdminGrantPreview,
   type AdminSession,
 } from "../api/adminApi";
+import { useToast } from "../components/toast/ToastProvider";
+import { formatAdminError } from "../lib/formatAdminError";
 import { adminQueryKeys } from "../lib/queryKeys";
 
 type UseGrantAdminOptions = {
@@ -17,10 +18,6 @@ type UseGrantAdminOptions = {
   onAuthFailure: (error: unknown) => boolean;
 };
 
-function queryErrorMessage(error: unknown, fallback: string): string {
-  return isAdminApiError(error) ? error.message : fallback;
-}
-
 export function useGrantAdmin({
   session,
   enabled,
@@ -28,9 +25,11 @@ export function useGrantAdmin({
 }: UseGrantAdminOptions) {
   const token = session?.adminSessionToken ?? null;
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [lookupEmployeeId, setLookupEmployeeId] = useState("");
+  const [toastedPreviewAt, setToastedPreviewAt] = useState(0);
 
   const previewQuery = useQuery({
     queryKey: adminQueryKeys.grantPreview(token ?? "", lookupEmployeeId),
@@ -39,6 +38,27 @@ export function useGrantAdmin({
     retry: false,
     meta: { onAuthFailure },
   });
+
+  useEffect(() => {
+    if (!previewQuery.error || onAuthFailure(previewQuery.error)) {
+      return;
+    }
+    if (previewQuery.errorUpdatedAt === toastedPreviewAt) {
+      return;
+    }
+    const formatted = formatAdminError(
+      previewQuery.error,
+      "Failed to look up employee.",
+    );
+    toast.error(formatted.title, formatted.description);
+    setToastedPreviewAt(previewQuery.errorUpdatedAt);
+  }, [
+    onAuthFailure,
+    previewQuery.error,
+    previewQuery.errorUpdatedAt,
+    toast,
+    toastedPreviewAt,
+  ]);
 
   const grantMutation = useMutation({
     mutationFn: (payload: AdminGrantPayload) =>
@@ -49,14 +69,18 @@ export function useGrantAdmin({
     },
     onSuccess: (result) => {
       setStatusMessage(result.message);
+      toast.success("Plant admin granted", result.message);
     },
     onError: (error) => {
       if (onAuthFailure(error)) {
         return;
       }
-      setActionError(
-        queryErrorMessage(error, "Failed to grant plant admin role."),
+      const formatted = formatAdminError(
+        error,
+        "Failed to grant plant admin role.",
       );
+      setActionError(formatted.title);
+      toast.error(formatted.title, formatted.description);
     },
   });
 
@@ -93,7 +117,8 @@ export function useGrantAdmin({
     preview,
     previewLoading: previewQuery.isFetching,
     previewError: previewQuery.error
-      ? queryErrorMessage(previewQuery.error, "Failed to look up employee.")
+      ? formatAdminError(previewQuery.error, "Failed to look up employee.")
+          .title
       : null,
     lookupEmployee,
     clearPreview,

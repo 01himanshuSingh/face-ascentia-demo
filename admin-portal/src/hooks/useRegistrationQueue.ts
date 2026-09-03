@@ -4,47 +4,64 @@ import { useCallback, useEffect, useState } from "react";
 import {
   approveRegistration,
   fetchRegistrationImage,
-  isAdminApiError,
   listPending,
   rejectRegistration,
   type AdminSession,
 } from "../api/adminApi";
+import { useToast } from "../components/toast/ToastProvider";
+import { formatAdminError } from "../lib/formatAdminError";
 import { adminQueryKeys } from "../lib/queryKeys";
 
 type UseRegistrationQueueOptions = {
   session: AdminSession | null;
+  workspacePlantId: string | null;
   enabled: boolean;
   onAuthFailure: (error: unknown) => boolean;
 };
 
-function queryErrorMessage(error: unknown, fallback: string): string {
-  return isAdminApiError(error) ? error.message : fallback;
-}
-
 export function useRegistrationQueue({
   session,
+  workspacePlantId,
   enabled,
   onAuthFailure,
 }: UseRegistrationQueueOptions) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const token = session?.adminSessionToken ?? null;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [toastedPendingAt, setToastedPendingAt] = useState(0);
+  const [toastedImageAt, setToastedImageAt] = useState(0);
 
   const pendingQuery = useQuery({
-    queryKey: adminQueryKeys.pending(token ?? ""),
-    queryFn: () => listPending(token!),
-    enabled: enabled && Boolean(token),
+    queryKey: adminQueryKeys.pending(token ?? "", workspacePlantId),
+    queryFn: () => listPending(token!, workspacePlantId),
+    enabled: enabled && Boolean(token) && Boolean(workspacePlantId),
     meta: { onAuthFailure },
   });
 
   useEffect(() => {
-    if (pendingQuery.error && onAuthFailure(pendingQuery.error)) {
+    if (!pendingQuery.error || onAuthFailure(pendingQuery.error)) {
       return;
     }
-  }, [onAuthFailure, pendingQuery.error]);
+    if (pendingQuery.errorUpdatedAt === toastedPendingAt) {
+      return;
+    }
+    const formatted = formatAdminError(
+      pendingQuery.error,
+      "Could not load pending registrations.",
+    );
+    toast.error(formatted.title, formatted.description);
+    setToastedPendingAt(pendingQuery.errorUpdatedAt);
+  }, [
+    onAuthFailure,
+    pendingQuery.error,
+    pendingQuery.errorUpdatedAt,
+    toast,
+    toastedPendingAt,
+  ]);
 
   const items = pendingQuery.data ?? [];
 
@@ -70,10 +87,25 @@ export function useRegistrationQueue({
   });
 
   useEffect(() => {
-    if (imageQuery.error && onAuthFailure(imageQuery.error)) {
+    if (!imageQuery.error || onAuthFailure(imageQuery.error)) {
       return;
     }
-  }, [imageQuery.error, onAuthFailure]);
+    if (imageQuery.errorUpdatedAt === toastedImageAt) {
+      return;
+    }
+    const formatted = formatAdminError(
+      imageQuery.error,
+      "Could not load registration photo.",
+    );
+    toast.error(formatted.title, formatted.description);
+    setToastedImageAt(imageQuery.errorUpdatedAt);
+  }, [
+    imageQuery.error,
+    imageQuery.errorUpdatedAt,
+    onAuthFailure,
+    toast,
+    toastedImageAt,
+  ]);
 
   useEffect(() => {
     const objectUrl = imageQuery.data;
@@ -89,9 +121,9 @@ export function useRegistrationQueue({
       return;
     }
     await queryClient.invalidateQueries({
-      queryKey: adminQueryKeys.pending(token),
+      queryKey: adminQueryKeys.pending(token, workspacePlantId),
     });
-  }, [queryClient, token]);
+  }, [queryClient, token, workspacePlantId]);
 
   const approveMutation = useMutation({
     mutationFn: (reason?: string) =>
@@ -99,11 +131,14 @@ export function useRegistrationQueue({
     onMutate: () => setActionError(null),
     onSuccess: async (result) => {
       setStatusMessage(result.message);
+      toast.success("Registration approved", result.message);
       await invalidatePending();
     },
     onError: (error) => {
       if (!onAuthFailure(error)) {
-        setActionError(queryErrorMessage(error, "Approve failed."));
+        const formatted = formatAdminError(error, "Approve failed.");
+        setActionError(formatted.title);
+        toast.error(formatted.title, formatted.description);
       }
     },
   });
@@ -114,11 +149,14 @@ export function useRegistrationQueue({
     onMutate: () => setActionError(null),
     onSuccess: async (result) => {
       setStatusMessage(result.message);
+      toast.success("Registration rejected", result.message);
       await invalidatePending();
     },
     onError: (error) => {
       if (!onAuthFailure(error)) {
-        setActionError(queryErrorMessage(error, "Reject failed."));
+        const formatted = formatAdminError(error, "Reject failed.");
+        setActionError(formatted.title);
+        toast.error(formatted.title, formatted.description);
       }
     },
   });
@@ -155,13 +193,14 @@ export function useRegistrationQueue({
   const error =
     actionError ??
     (pendingQuery.error && !onAuthFailure(pendingQuery.error)
-      ? queryErrorMessage(
+      ? formatAdminError(
           pendingQuery.error,
           "Could not load pending registrations.",
-        )
+        ).title
       : null) ??
     (imageQuery.error && !onAuthFailure(imageQuery.error)
-      ? queryErrorMessage(imageQuery.error, "Could not load registration photo.")
+      ? formatAdminError(imageQuery.error, "Could not load registration photo.")
+          .title
       : null);
 
   return {

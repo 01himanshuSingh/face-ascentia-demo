@@ -1,15 +1,40 @@
-"""Admin Portal HTTP routes — login and plant-scoped registration review."""
+"""Admin Portal HTTP routes — auth, plant-workspace review, grant.
+
+Layering
+--------
+Routes stay thin: session dependency + schema bind → services.
+Plant workspace scope and RBAC live in services (admin_review, admin_grant, admin_rbac).
+
+Plant catalog CRUD (``GET/POST/PATCH /admin/plants``) lives in ``admin_plants.py``
+so registration-review and plant-catalog stay separate bounded contexts.
+
+Plant workspace (pending queue)
+-------------------------------
+  GET /admin/registrations/pending?plantId=<uuid>
+
+  SUPER_ADMIN  — plantId = active plant workspace (omit = all plants, transitional)
+  PLANT_ADMIN  — plantId optional; must match session.plant_id if sent
+
+Does not rewrite admin_roles.plant_id. UI selector is a view lens only.
+
+Grant (worker-first)
+--------------------
+  Plant for PLANT_ADMIN is derived from employees.plant_id (omit plantId on grant body).
+"""
 
 from __future__ import annotations
 
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
+from app.common.enums import AdminRoleType
+from app.common.exceptions import AdminError
 from app.database.session import get_db
 from app.schemas.admin import (
+    AdminErrorCode,
     AdminErrorResponse,
     AdminGrantPreviewResponse,
     AdminGrantRequest,
@@ -32,7 +57,13 @@ ADMIN_SESSION_HEADER = "X-Admin-Session-Token"
 def get_admin_session(
     x_admin_session_token: Annotated[str | None, Header(alias=ADMIN_SESSION_HEADER)] = None,
 ) -> AdminSession:
+    """Resolve opaque admin session from X-Admin-Session-Token."""
     return get_shared_admin_auth_service().resolve_session(x_admin_session_token)
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
 
 
 @router.post(
@@ -49,6 +80,11 @@ def admin_login(
         employee_id=body.employee_id,
         password=body.password,
     )
+
+
+# ---------------------------------------------------------------------------
+# Grant PLANT_ADMIN (worker-first; plant from employee row)
+# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -82,14 +118,9 @@ def grant_admin_role(
     db: Session = Depends(get_db),
     session: AdminSession = Depends(get_admin_session),
 ) -> AdminGrantResponse:
-    from app.common.enums import AdminRoleType
-
     try:
         role = AdminRoleType(body.role.strip().upper())
     except ValueError as exc:
-        from app.common.exceptions import AdminError
-        from app.schemas.admin import AdminErrorCode
-
         raise AdminError(
             f"Invalid role: {body.role}",
             code=AdminErrorCode.PERMISSION_DENIED,
@@ -106,16 +137,39 @@ def grant_admin_role(
     )
 
 
+# ---------------------------------------------------------------------------
+# Registration review (pending queue = active plant workspace)
+# ---------------------------------------------------------------------------
+
+
 @router.get(
     "/registrations/pending",
     response_model=RegistrationQueueResponse,
-    responses={401: {"model": AdminErrorResponse}, 403: {"model": AdminErrorResponse}},
+    responses={
+        401: {"model": AdminErrorResponse},
+        403: {"model": AdminErrorResponse},
+        404: {"model": AdminErrorResponse},
+    },
 )
 def list_pending_registrations(
     db: Session = Depends(get_db),
     session: AdminSession = Depends(get_admin_session),
+    plant_id: Annotated[
+        uuid.UUID | None,
+        Query(
+            alias="plantId",
+            description=(
+                "Active plant workspace. SUPER: filter to this plant "
+                "(omit = all plants). PLANT_ADMIN: omit or must equal session plant."
+            ),
+        ),
+    ] = None,
 ) -> RegistrationQueueResponse:
-    return get_shared_admin_review_service().list_pending(db, session)
+    return get_shared_admin_review_service().list_pending(
+        db,
+        session,
+        plant_id=plant_id,
+    )
 
 
 @router.get(
@@ -173,4 +227,4 @@ def reject_registration(
     )
 
 
-__all__ = ["router", "ADMIN_SESSION_HEADER"]
+__all__ = ["router", "ADMIN_SESSION_HEADER", "get_admin_session"]

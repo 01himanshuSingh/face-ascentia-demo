@@ -34,8 +34,11 @@ class AdminPermissionCode(StrEnum):
     """Permission codes mapped to admin_roles via admin_role_permissions.
 
     Catalog lives in admin_permissions; effective grants in admin_role_permissions.
-    v1 uses fixed defaults below — future SUPER-only UI may edit per-admin rows
-    without changing these enum codes.
+    Runtime checks use session.permissions (DB), never ``session.role == SUPER``.
+
+    v1 copies defaults below on grant/seed. Future dynamic RBAC UI may assign any
+    catalog permission to any role/admin without changing these enum codes —
+    e.g. a future ops role can receive PLANTS_MANAGE the same way SUPER does today.
     """
 
     REGISTRATION_VIEW_PENDING = "REGISTRATION_VIEW_PENDING"
@@ -48,26 +51,26 @@ class AdminPermissionCode(StrEnum):
     ADMIN_GRANT_PLANT_ADMIN = "ADMIN_GRANT_PLANT_ADMIN"
     # Catalog only in v1 — not assigned until sub-admin phase.
     ADMIN_GRANT_SUB_ADMIN = "ADMIN_GRANT_SUB_ADMIN"
+    # Plant catalog CRUD (create / update / soft-deactivate).
+    # Role-agnostic permission: v1 default maps to SUPER_ADMIN (all permissions).
+    # Future roles can receive PLANTS_MANAGE via admin_role_permissions without a new enum.
+    PLANTS_MANAGE = "PLANTS_MANAGE"
 
 
 # v1 default permission sets copied to admin_role_permissions on grant / seed.
 #
-# Policy (see admin_rbac for enforcement):
-#   SUPER_ADMIN  — all plants; may grant PLANT_ADMIN for any plant
-#   PLANT_ADMIN  — own plant only; registration review + grant PLANT_ADMIN in plant
+# Policy (see admin_rbac / plant_catalog for enforcement):
+#   SUPER_ADMIN  — full catalog (every AdminPermissionCode); all plants;
+#                  only global session (plant_id NULL) may create / deactivate plants
+#   PLANT_ADMIN  — own plant only; registration review + grant + PLANTS_MANAGE
+#                  (read/update own plant; cannot create another workspace)
 #   SUB_ADMIN    — reserved; defaults kept for future phase; grant API rejects in v1
 #
-# Dynamic RBAC UI (future): same tables; SUPER edits admin_role_permissions rows.
+# Dynamic RBAC UI (future): same tables; edit admin_role_permissions per role/admin.
+# Gate features on permission codes (e.g. PLANTS_MANAGE), not on role == SUPER_ADMIN.
 ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCode]] = {
-    AdminRoleType.SUPER_ADMIN: frozenset(
-        {
-            AdminPermissionCode.REGISTRATION_VIEW_PENDING,
-            AdminPermissionCode.REGISTRATION_VIEW_IMAGE,
-            AdminPermissionCode.REGISTRATION_APPROVE,
-            AdminPermissionCode.REGISTRATION_REJECT,
-            AdminPermissionCode.ADMIN_GRANT_PLANT_ADMIN,
-        }
-    ),
+    # SUPER always gets the full permission catalog — including new codes added later.
+    AdminRoleType.SUPER_ADMIN: frozenset(AdminPermissionCode),
     AdminRoleType.PLANT_ADMIN: frozenset(
         {
             AdminPermissionCode.REGISTRATION_VIEW_PENDING,
@@ -75,6 +78,8 @@ ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCod
             AdminPermissionCode.REGISTRATION_APPROVE,
             AdminPermissionCode.REGISTRATION_REJECT,
             AdminPermissionCode.ADMIN_GRANT_PLANT_ADMIN,
+            # Own plant catalog read/update only — create/deactivate blocked in plant_catalog.
+            AdminPermissionCode.PLANTS_MANAGE,
         }
     ),
     AdminRoleType.SUB_ADMIN: frozenset(
@@ -96,3 +101,7 @@ class AuditAction(StrEnum):
     REVOKE = "REVOKE"
     ADMIN_KIOSK_ENROLL = "ADMIN_KIOSK_ENROLL"
     ADMIN_GRANT = "ADMIN_GRANT"
+    # Plant catalog (soft-deactivate, never hard-delete with dependents).
+    PLANT_CREATE = "PLANT_CREATE"
+    PLANT_UPDATE = "PLANT_UPDATE"
+    PLANT_DEACTIVATE = "PLANT_DEACTIVATE"

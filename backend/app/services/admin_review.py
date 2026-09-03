@@ -1,4 +1,14 @@
-"""Admin Portal registration review — approve/reject plant-scoped queue."""
+"""Admin Portal registration review — approve/reject plant-scoped queue.
+
+Pending queue follows the **active plant workspace**:
+
+  PLANT_ADMIN  — always ``session.plant_id`` (client plantId must match or be omitted)
+  SUPER_ADMIN  — ``plant_id`` query = workspace lens for that plant;
+                 omit ``plant_id`` only for legacy "all plants" listing
+
+Workspace selection is a view filter. It never rewrites ``admin_roles.plant_id``.
+Approve / reject / image still use ``assert_can_manage_plant`` on the request row.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +47,40 @@ from app.services.duplicate_check import (
 logger = logging.getLogger(__name__)
 
 
+def _resolve_pending_workspace_plant_id(
+    session: AdminSession,
+    plant_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    """Resolve which plant's PENDING rows to list.
+
+    Returns
+    -------
+    uuid.UUID
+        Plant-scoped queue (normal path for both roles).
+    None
+        SUPER only — all plants (optional / transitional when no workspace set).
+    """
+    if session.role == AdminRoleType.SUPER_ADMIN.value:
+        if plant_id is None:
+            return None
+        assert_can_manage_plant(session, plant_id)
+        return plant_id
+
+    if session.plant_id is None:
+        raise AdminError(
+            "Plant admin has no plant assignment.",
+            code=AdminErrorCode.PLANT_ACCESS_DENIED,
+            http_status=403,
+        )
+    if plant_id is not None and plant_id != session.plant_id:
+        raise AdminError(
+            "Plant admin cannot view another plant's queue.",
+            code=AdminErrorCode.PLANT_ACCESS_DENIED,
+            http_status=403,
+        )
+    return session.plant_id
+
+
 class AdminReviewService:
     def __init__(
         self,
@@ -51,18 +95,32 @@ class AdminReviewService:
         self,
         db: Session,
         session: AdminSession,
+        *,
+        plant_id: uuid.UUID | None = None,
     ) -> RegistrationQueueResponse:
+        """List PENDING registrations for the active plant workspace.
+
+        Parameters
+        ----------
+        plant_id:
+            Active plant workspace from Admin Portal (SUPER selector).
+            PLANT_ADMIN may omit; forced to ``session.plant_id``.
+        """
         assert_permission(session, AdminPermissionCode.REGISTRATION_VIEW_PENDING)
-        if session.role == AdminRoleType.SUPER_ADMIN.value:
+
+        workspace_plant_id = _resolve_pending_workspace_plant_id(session, plant_id)
+
+        if workspace_plant_id is None:
             rows = registration_repository.list_pending_all(db)
         else:
-            if session.plant_id is None:
+            plant = plant_repository.get_by_id(db, workspace_plant_id)
+            if plant is None or not plant.is_active:
                 raise AdminError(
-                    "Plant admin has no plant assignment.",
+                    "Plant workspace not found or inactive.",
                     code=AdminErrorCode.PLANT_ACCESS_DENIED,
-                    http_status=403,
+                    http_status=404,
                 )
-            rows = registration_repository.list_pending_by_plant(db, session.plant_id)
+            rows = registration_repository.list_pending_by_plant(db, workspace_plant_id)
 
         items: list[RegistrationQueueItem] = []
         for row in rows:

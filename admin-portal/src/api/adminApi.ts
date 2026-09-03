@@ -3,20 +3,52 @@
  *
  * Wire contract (camelCase aliases from FastAPI):
  *   POST /admin/login
- *   GET  /admin/registrations/pending          (X-Admin-Session-Token)
- *   GET  /admin/registrations/{id}/image       (X-Admin-Session-Token)
- *   POST /admin/registrations/{id}/approve     (X-Admin-Session-Token)
- *   POST /admin/registrations/{id}/reject      (X-Admin-Session-Token)
- *   POST /admin/users/grant                    (X-Admin-Session-Token)
- *   GET  /admin/users/grant-preview/{employeeId}  (resolve plant from employee)
- * so a refresh keeps the desk admin signed in until the tab closes.
+ *   GET  /admin/registrations/pending?plantId=  (active plant workspace)
+ *   GET  /admin/registrations/{id}/image
+ *   POST /admin/registrations/{id}/approve
+ *   POST /admin/registrations/{id}/reject
+ *   POST /admin/users/grant
+ *   GET  /admin/users/grant-preview/{employeeId}
+ *   GET  /plants                               (active only — workspace selector / kiosk)
+ *   GET  /admin/plants                         (catalog incl. inactive — PLANTS_MANAGE)
+ *   POST /admin/plants                         (create)
+ *   PATCH /admin/plants/{plantId}              (rename / soft-deactivate / reactivate)
  *
- * Plant scoping is enforced by the backend — this client never filters
- * the queue; PLANT_ADMIN sees own plant, SUPER_ADMIN sees all.
+ * Plant layers (do not merge)
+ * ---------------------------
+ *   A) Workspace lens — which plant am I working in? (sessionStorage + GET /plants)
+ *   B) Plant catalog  — create / update / soft-deactivate (GET/POST/PATCH /admin/plants)
+ *
+ * Pending queue follows active plant workspace (not client-side row filter):
+ *   PLANT_ADMIN — session.plantId (fixed)
+ *   SUPER_ADMIN — selectedPlantId from portal storage → ?plantId=
+ *
+ * Backend enforces RBAC on every API call. Portal tabs gate on
+ * ``session.permissions`` returned at login (e.g. PLANTS_MANAGE → Plants tab).
+ * Grant plant remains derived from the employee row.
  */
 
 const SESSION_STORAGE_KEY = "faceAuth.adminSession";
+/** SUPER active plant workspace — tab-scoped; does not rewrite admin_roles. */
+const WORKSPACE_PLANT_STORAGE_KEY = "faceAuth.adminWorkspacePlantId";
 const ADMIN_SESSION_HEADER = "X-Admin-Session-Token";
+
+/**
+ * Permission codes mirrored from backend AdminPermissionCode.
+ * Portal tabs/features gate on session.permissions — not role name.
+ * Backend still enforces the same codes on every API call.
+ */
+export const AdminPermission = {
+  REGISTRATION_VIEW_PENDING: "REGISTRATION_VIEW_PENDING",
+  REGISTRATION_VIEW_IMAGE: "REGISTRATION_VIEW_IMAGE",
+  REGISTRATION_APPROVE: "REGISTRATION_APPROVE",
+  REGISTRATION_REJECT: "REGISTRATION_REJECT",
+  ADMIN_GRANT_PLANT_ADMIN: "ADMIN_GRANT_PLANT_ADMIN",
+  PLANTS_MANAGE: "PLANTS_MANAGE",
+} as const;
+
+export type AdminPermissionCode =
+  (typeof AdminPermission)[keyof typeof AdminPermission];
 
 // ---------------------------------------------------------------------------
 // Types (mirror backend/app/schemas/admin.py serialization aliases)
@@ -28,14 +60,64 @@ export type AdminSession = {
   role: string;
   plantId: string | null;
   expiresAt: string;
+  /** Effective codes from admin_role_permissions (returned at login). */
+  permissions: string[];
 };
 
-/** UI gate for Grant tab — backend enforces permission + plant scope on grant. */
+/** True when session carries the given permission code. */
+export function hasPermission(
+  session: AdminSession,
+  code: AdminPermissionCode | string,
+): boolean {
+  return session.permissions.includes(code);
+}
+
+/**
+ * UI gate for Grant tab — show when ADMIN_GRANT_PLANT_ADMIN is present.
+ * Backend still enforces permission + plant scope on grant.
+ */
 export function canGrantPlantAdmin(session: AdminSession): boolean {
-  return (
-    session.role === "SUPER_ADMIN" ||
-    (session.role === "PLANT_ADMIN" && session.plantId != null)
-  );
+  return hasPermission(session, AdminPermission.ADMIN_GRANT_PLANT_ADMIN);
+}
+
+export function isSuperAdmin(session: AdminSession): boolean {
+  return session.role === "SUPER_ADMIN";
+}
+
+/**
+ * UI gate for Plants catalog tab — show when PLANTS_MANAGE is present.
+ * Role-agnostic: any admin granted this permission sees the tab.
+ * Backend still enforces PLANTS_MANAGE + plant scope on catalog APIs.
+ */
+export function canManagePlants(session: AdminSession): boolean {
+  return hasPermission(session, AdminPermission.PLANTS_MANAGE);
+}
+
+/**
+ * Create / soft-deactivate plant workspaces — global catalog only
+ * (session.plantId == null, typically SUPER). Plant-scoped admins may
+ * read/update their own plant but cannot create another workspace.
+ */
+export function canCreatePlants(session: AdminSession): boolean {
+  return canManagePlants(session) && session.plantId == null;
+}
+
+export function canDeactivatePlants(session: AdminSession): boolean {
+  return canCreatePlants(session);
+}
+
+/**
+ * Resolve plantId for pending (and later grant search).
+ * SUPER: portal workspace selection. PLANT_ADMIN: session.plantId only.
+ */
+export function resolveWorkspacePlantId(
+  session: AdminSession,
+  selectedPlantId: string | null,
+): string | null {
+  if (isSuperAdmin(session)) {
+    return selectedPlantId;
+  }
+  return session.plantId;
 }
 
 export type AdminGrantPreview = {
@@ -67,10 +149,37 @@ export type RegistrationDecision = {
   message: string;
 };
 
+/** Active plant — public GET /plants (workspace selector / kiosk). */
 export type PlantListItem = {
   plantId: string;
   plantCode: string;
   plantName: string;
+};
+
+/** Full plant row — GET /admin/plants catalog (includes lifecycle). */
+export type AdminPlantItem = {
+  plantId: string;
+  plantCode: string;
+  plantName: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type PlantCreatePayload = {
+  plantCode: string;
+  plantName: string;
+};
+
+/** Partial update — omit fields you do not change. isActive=false soft-deactivates. */
+export type PlantUpdatePayload = {
+  plantCode?: string;
+  plantName?: string;
+  isActive?: boolean;
+};
+
+export type PlantMutationResult = {
+  plant: AdminPlantItem;
+  message: string;
 };
 
 export type AdminGrantResult = {
@@ -169,12 +278,26 @@ export function loadStoredSession(): AdminSession | null {
     return null;
   }
   try {
-    const session = JSON.parse(raw) as AdminSession;
-    if (!session.adminSessionToken || !session.employeeId) {
+    const parsed = JSON.parse(raw) as Partial<AdminSession>;
+    if (!parsed.adminSessionToken || !parsed.employeeId) {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
-    return session;
+    // Older sessions without permissions must re-login for permission-gated tabs.
+    const permissions = Array.isArray(parsed.permissions)
+      ? parsed.permissions.filter((code): code is string => typeof code === "string")
+      : [];
+    return {
+      adminSessionToken: parsed.adminSessionToken,
+      employeeId: parsed.employeeId,
+      role: typeof parsed.role === "string" ? parsed.role : "",
+      plantId:
+        typeof parsed.plantId === "string" || parsed.plantId === null
+          ? parsed.plantId
+          : null,
+      expiresAt: typeof parsed.expiresAt === "string" ? parsed.expiresAt : "",
+      permissions,
+    };
   } catch {
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
     return null;
@@ -187,35 +310,212 @@ export function saveSession(session: AdminSession): void {
 
 export function clearSession(): void {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  clearWorkspacePlantId();
+}
+
+// ---------------------------------------------------------------------------
+// SUPER plant workspace persistence (view lens only — not admin_roles)
+// ---------------------------------------------------------------------------
+
+export function loadWorkspacePlantId(): string | null {
+  const raw = sessionStorage.getItem(WORKSPACE_PLANT_STORAGE_KEY);
+  if (!raw || !raw.trim()) {
+    return null;
+  }
+  return raw.trim();
+}
+
+export function saveWorkspacePlantId(plantId: string | null): void {
+  if (!plantId) {
+    sessionStorage.removeItem(WORKSPACE_PLANT_STORAGE_KEY);
+    return;
+  }
+  sessionStorage.setItem(WORKSPACE_PLANT_STORAGE_KEY, plantId);
+}
+
+export function clearWorkspacePlantId(): void {
+  sessionStorage.removeItem(WORKSPACE_PLANT_STORAGE_KEY);
 }
 
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
 
-/** POST /admin/login — Employee ID + password → session token. */
+/** POST /admin/login — Employee ID + password → session token + permissions. */
 export async function login(
   employeeId: string,
   password: string,
 ): Promise<AdminSession> {
-  const session = await requestJson<AdminSession>("/admin/login", {
+  const raw = await requestJson<Partial<AdminSession>>("/admin/login", {
     method: "POST",
     body: JSON.stringify({ employeeId, password }),
   });
+  const session: AdminSession = {
+    adminSessionToken: raw.adminSessionToken ?? "",
+    employeeId: raw.employeeId ?? "",
+    role: raw.role ?? "",
+    plantId: raw.plantId ?? null,
+    expiresAt: raw.expiresAt ?? "",
+    permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+  };
+  if (!session.adminSessionToken || !session.employeeId) {
+    throw new AdminApiClientError(
+      {
+        detail: "Login response missing session token.",
+        code: "INVALID_CREDENTIALS",
+      },
+      500,
+    );
+  }
   saveSession(session);
   return session;
 }
 
-/** GET /admin/registrations/pending — plant-scoped by backend session. */
+/**
+ * GET /admin/registrations/pending[?plantId=]
+ * Pass active plant workspace for SUPER; PLANT_ADMIN may omit (backend uses session).
+ */
 export async function listPending(
   token: string,
+  plantId?: string | null,
 ): Promise<RegistrationQueueItem[]> {
+  const params = new URLSearchParams();
+  const trimmed = plantId?.trim();
+  if (trimmed) {
+    params.set("plantId", trimmed);
+  }
+  const query = params.toString();
+  const path = query
+    ? `/admin/registrations/pending?${query}`
+    : "/admin/registrations/pending";
+
   const body = await requestJson<{ items: RegistrationQueueItem[] }>(
-    "/admin/registrations/pending",
+    path,
     { method: "GET" },
     token,
   );
   return body.items;
+}
+
+/** GET /plants — active plants for SUPER workspace selector (and kiosk Path A). */
+export async function listPlants(): Promise<PlantListItem[]> {
+  const body = await requestJson<{ plants: PlantListItem[] }>("/plants", {
+    method: "GET",
+  });
+  return body.plants;
+}
+
+// ---------------------------------------------------------------------------
+// Plant catalog (Layer B — PLANTS_MANAGE; soft-deactivate only)
+// ---------------------------------------------------------------------------
+
+/** GET /admin/plants — full catalog including inactive. */
+export async function listAdminPlants(token: string): Promise<AdminPlantItem[]> {
+  const body = await requestJson<{ plants: AdminPlantItem[] }>(
+    "/admin/plants",
+    { method: "GET" },
+    token,
+  );
+  return body.plants;
+}
+
+/** POST /admin/plants — create active plant (unique plantCode). */
+export async function createPlant(
+  token: string,
+  payload: PlantCreatePayload,
+): Promise<PlantMutationResult> {
+  const plantCode = payload.plantCode.trim().toUpperCase();
+  const plantName = payload.plantName.trim();
+
+  if (!plantCode || !plantName) {
+    throw new AdminApiClientError(
+      {
+        detail: "Plant code and plant name are required.",
+        code: "INVALID_CREDENTIALS",
+      },
+      400,
+    );
+  }
+
+  return requestJson<PlantMutationResult>(
+    "/admin/plants",
+    {
+      method: "POST",
+      body: JSON.stringify({ plantCode, plantName }),
+    },
+    token,
+  );
+}
+
+/**
+ * PATCH /admin/plants/{plantId} — rename, change code, soft-deactivate, or reactivate.
+ * Soft-deactivate keeps dependent FKs; plant drops from public GET /plants.
+ */
+export async function updatePlant(
+  token: string,
+  plantId: string,
+  payload: PlantUpdatePayload,
+): Promise<PlantMutationResult> {
+  const trimmedId = plantId.trim();
+  if (!trimmedId) {
+    throw new AdminApiClientError(
+      {
+        detail: "plantId is required.",
+        code: "PLANT_NOT_FOUND",
+      },
+      400,
+    );
+  }
+
+  const body: Record<string, string | boolean> = {};
+  if (payload.plantCode !== undefined) {
+    const plantCode = payload.plantCode.trim().toUpperCase();
+    if (!plantCode) {
+      throw new AdminApiClientError(
+        {
+          detail: "plantCode cannot be blank.",
+          code: "INVALID_CREDENTIALS",
+        },
+        400,
+      );
+    }
+    body.plantCode = plantCode;
+  }
+  if (payload.plantName !== undefined) {
+    const plantName = payload.plantName.trim();
+    if (!plantName) {
+      throw new AdminApiClientError(
+        {
+          detail: "plantName cannot be blank.",
+          code: "INVALID_CREDENTIALS",
+        },
+        400,
+      );
+    }
+    body.plantName = plantName;
+  }
+  if (payload.isActive !== undefined) {
+    body.isActive = payload.isActive;
+  }
+
+  if (Object.keys(body).length === 0) {
+    throw new AdminApiClientError(
+      {
+        detail: "At least one of plantCode, plantName, or isActive is required.",
+        code: "INVALID_CREDENTIALS",
+      },
+      400,
+    );
+  }
+
+  return requestJson<PlantMutationResult>(
+    `/admin/plants/${encodeURIComponent(trimmedId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+    token,
+  );
 }
 
 /**

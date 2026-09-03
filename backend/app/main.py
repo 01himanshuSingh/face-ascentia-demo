@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.admin_plants import router as admin_plants_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.kiosk_admin import router as kiosk_admin_router
 from app.api.routes.plants import router as plants_router
@@ -45,6 +46,7 @@ app.include_router(auth_router)
 app.include_router(registration_router)
 app.include_router(plants_router)
 app.include_router(admin_router)
+app.include_router(admin_plants_router)
 app.include_router(kiosk_admin_router)
 
 

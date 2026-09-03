@@ -76,6 +76,7 @@ class AdminAuthService:
             role=admin.role,
             plant_id=admin.plant_id,
             expires_at=expires_at.isoformat(),
+            permissions=sorted(permission_codes),
         )
 
     def resolve_session(self, token: str | None) -> AdminSession:

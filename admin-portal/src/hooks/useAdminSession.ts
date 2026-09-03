@@ -8,12 +8,15 @@ import {
   login,
   type AdminSession,
 } from "../api/adminApi";
+import { useToast } from "../components/toast/ToastProvider";
+import { formatAdminError } from "../lib/formatAdminError";
 import { adminQueryKeys } from "../lib/queryKeys";
 
 export type AuthView = "bootstrap" | "login" | "dashboard";
 
 export function useAdminSession() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [session, setSession] = useState<AdminSession | null>(null);
   const [view, setView] = useState<AuthView>("bootstrap");
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -32,8 +35,11 @@ export function useAdminSession() {
       setSession(null);
       setView("login");
       setSessionNotice(notice ?? null);
+      if (notice) {
+        toast.info("Signed out", notice);
+      }
     },
-    [queryClient],
+    [queryClient, toast],
   );
 
   const loginMutation = useMutation({
@@ -51,13 +57,15 @@ export function useAdminSession() {
     onSuccess: (nextSession) => {
       setSession(nextSession);
       setView("dashboard");
+      toast.success("Signed in", `Welcome, ${nextSession.employeeId}`);
     },
     onError: (error) => {
-      setLoginError(
-        isAdminApiError(error)
-          ? error.message
-          : "Sign in failed. Check backend is running.",
+      const formatted = formatAdminError(
+        error,
+        "Sign in failed. Check backend is running.",
       );
+      setLoginError(formatted.title);
+      toast.error(formatted.title, formatted.description);
     },
   });
 

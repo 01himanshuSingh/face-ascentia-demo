@@ -22,6 +22,9 @@ class AdminErrorCode(StrEnum):
     EMPLOYEE_NOT_FOUND = "EMPLOYEE_NOT_FOUND"
     ADMIN_ALREADY_EXISTS = "ADMIN_ALREADY_EXISTS"
     MISSING_DECISION_REASON = "MISSING_DECISION_REASON"
+    # Plant catalog (PLANTS_MANAGE)
+    PLANT_NOT_FOUND = "PLANT_NOT_FOUND"
+    PLANT_CODE_EXISTS = "PLANT_CODE_EXISTS"
 
 
 class AdminErrorResponse(BaseModel):
@@ -46,6 +49,9 @@ class AdminLoginResponse(BaseModel):
     role: str
     plant_id: UUID | None = Field(default=None, serialization_alias="plantId")
     expires_at: str = Field(..., serialization_alias="expiresAt")
+    # Effective permission codes from admin_role_permissions — portal UI gates
+    # tabs/features on these (backend still enforces on every mutating call).
+    permissions: list[str] = Field(default_factory=list)
 
 
 class RegistrationQueueItem(BaseModel):
