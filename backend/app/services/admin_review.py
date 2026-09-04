@@ -8,6 +8,12 @@ Pending queue follows the **active plant workspace**:
 
 Workspace selection is a view filter. It never rewrites ``admin_roles.plant_id``.
 Approve / reject / image still use ``assert_can_manage_plant`` on the request row.
+
+Reject retention (v1)
+---------------------
+Text history kept: registration_requests (REJECTED) + audit_log REJECT metadata
+(employee_id, name, source, captured_at, reason). Face bytes for **that**
+request only are deleted from raw_images — approved / other requests untouched.
 """
 
 from __future__ import annotations
@@ -268,6 +274,13 @@ class AdminReviewService:
         *,
         reason: str,
     ) -> RegistrationDecisionResponse:
+        """Reject PENDING request: text audit + request row; purge face image only.
+
+        Single transaction: mark REJECTED → delete that request's raw_images →
+        audit. If any step fails before commit, the whole unit rolls back
+        (no orphan REJECTED-without-audit, no image deleted without REJECTED).
+        Missing image is not an error (``image_deleted=false`` in audit).
+        """
         assert_permission(session, AdminPermissionCode.REGISTRATION_REJECT)
         normalized_reason = (reason or "").strip()
         if not normalized_reason:
@@ -279,26 +292,62 @@ class AdminReviewService:
 
         request = self._load_accessible_pending(db, session, request_id)
 
-        registration_repository.mark_reviewed(
-            db,
-            request,
-            status=RegistrationStatus.REJECTED,
-            reviewed_by=session.employee_id,
-            decision_reason=normalized_reason,
-        )
+        try:
+            registration_repository.mark_reviewed(
+                db,
+                request,
+                status=RegistrationStatus.REJECTED,
+                reviewed_by=session.employee_id,
+                decision_reason=normalized_reason,
+            )
 
-        audit_repository.create_entry(
-            db,
-            action=AuditAction.REJECT.value,
-            actor_id=session.employee_id,
-            actor_role=session.role,
-            target_type="registration_request",
-            target_id=str(request.request_id),
-            plant_id=request.plant_id,
-            metadata={"reason": normalized_reason},
-        )
+            # Biometric purge for this rejected request only — not other requests.
+            image_deleted = raw_image_repository.delete_for_request(
+                db,
+                request.request_id,
+            )
 
-        db.commit()
+            audit_repository.create_entry(
+                db,
+                action=AuditAction.REJECT.value,
+                actor_id=session.employee_id,
+                actor_role=session.role,
+                target_type="registration_request",
+                target_id=str(request.request_id),
+                plant_id=request.plant_id,
+                metadata={
+                    "employee_id": request.employee_id,
+                    "submitted_full_name": request.submitted_full_name,
+                    "source": request.source,
+                    "captured_at": request.captured_at.isoformat()
+                    if request.captured_at
+                    else None,
+                    "reason": normalized_reason,
+                    "image_deleted": image_deleted,
+                },
+            )
+
+            db.commit()
+        except AdminError:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "admin_reject_failed | request=%s | employee=%s | reviewer=%s",
+                request.request_id,
+                request.employee_id,
+                session.employee_id,
+            )
+            raise
+
+        logger.info(
+            "admin_reject | request=%s | employee=%s | reviewer=%s | image_deleted=%s",
+            request.request_id,
+            request.employee_id,
+            session.employee_id,
+            image_deleted,
+        )
 
         return RegistrationDecisionResponse(
             request_id=request.request_id,

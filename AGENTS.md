@@ -2,7 +2,7 @@
 
 > **Purpose of this file**: Project context for Cursor (or any dev) before touching SDK state-machine code, registration flows, admin routes, or Admin Portal. Read this together with `PROJECT_CONTEXT.md` and `docs/architecture/registration-flow.md`.
 
-Last updated: 2026-08-31
+Last updated: 2026-09-04
 
 ---
 
@@ -64,7 +64,7 @@ Step 3 — Complete person
 
 **v1 roles:** `SUPER_ADMIN` + `PLANT_ADMIN` only. **SUB_ADMIN deferred.**
 
-**Not built yet:** Admin Portal UI for Step 2. **API:** `POST /admin/users/grant` (PLANT_ADMIN only). Dev: `seed_super_admin.py` → `seed_admin.py`.
+**Built:** Admin Portal grant UI + `POST /admin/users/grant` (worker-first; plant from employee row). SUPER plant-admin roster + soft ungrant (`GET /admin/users`, `POST /admin/users/{id}/revoke`). Dev: `seed_super_admin.py` → `seed_admin.py`.
 
 ---
 
@@ -96,18 +96,25 @@ PLANT_ADMIN  ──does──►    approve / reject PENDING for own plant only
 | `REGISTRATION_VIEW_IMAGE` | ✓ | ✓ |
 | `REGISTRATION_APPROVE` | ✓ | ✓ |
 | `REGISTRATION_REJECT` | ✓ | ✓ |
-| `ADMIN_GRANT_PLANT_ADMIN` | ✓ | ✗ |
+| `ADMIN_GRANT_PLANT_ADMIN` | ✓ | ✓ (own plant; see 2026-09-02) |
+| `PLANTS_MANAGE` | ✓ | ✓ (own plant update; create/deactivate = SUPER/global) |
 | `ADMIN_GRANT_SUB_ADMIN` | ✗ (catalog only, future) | ✗ |
+
+**Revoke (v1):** SUPER global session + `ADMIN_GRANT_PLANT_ADMIN` only. Soft `admin_roles.is_active=false`. PLANT_ADMIN cannot ungrant peers.
 
 Plant scoping: `PLANT_ADMIN` queue + approve/reject enforced by `session.plant_id == request.plant_id`. `SUPER_ADMIN` bypasses plant filter.
 
-### Grant API (v1)
+### Grant / revoke API (v1)
 
 ```text
 POST /admin/users/grant
-  Body: { employeeId, role: "PLANT_ADMIN", plantId, password }
-  Caller: SUPER_ADMIN only (needs ADMIN_GRANT_PLANT_ADMIN)
-  Target: must exist in employees (worker-first recommended)
+ Body: { employeeId, role: "PLANT_ADMIN", password }  — plant from employees.plant_id
+ Caller: SUPER or PLANT_ADMIN with ADMIN_GRANT_PLANT_ADMIN (own plant only for PLANT_ADMIN)
+
+GET  /admin/users?plantId=
+POST /admin/users/{employeeId}/revoke
+ Caller: SUPER global session + ADMIN_GRANT_PLANT_ADMIN only
+ Effect: admin_roles.is_active=false; employee/enrollments unchanged
 ```
 
 ### Dev seed order (no worker pre-seed)
@@ -175,15 +182,19 @@ Admin Portal approve
   → audit_log APPROVE
 ```
 
-### Admin Portal API (backend done; React UI pending)
+### Admin Portal API (backend + React UI — registration / grant / plants / ungrant)
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /admin/login` | Admin Employee ID + password |
-| `GET /admin/registrations/pending` | Plant-scoped queue |
+| `POST /admin/login` | Admin Employee ID + password (+ permissions) |
+| `GET /admin/registrations/pending` | Plant-scoped queue (`?plantId=` for SUPER lens) |
 | `GET /admin/registrations/{id}/image` | Face photo for HR |
 | `POST /admin/registrations/{id}/approve` | Create employee + enrollment |
 | `POST /admin/registrations/{id}/reject` | Reject with reason |
+| `POST /admin/users/grant` | Grant PLANT_ADMIN (worker-first) |
+| `GET /admin/users` | Plant-admin roster (SUPER + workspace plant) |
+| `POST /admin/users/{id}/revoke` | Soft ungrant plant admin |
+| Plant catalog routes | Create / update / soft-deactivate (`PLANTS_MANAGE`) |
 
 **Alembic note:** Migration `20260829_0005` dropped FK from `registration_requests.employee_id` → `employees` so intake works without pre-existing HR row.
 
@@ -315,23 +326,29 @@ No new tables required.
 | `GET /plants` | Done |
 | Admin approve/reject API | Done (permission-checked) |
 | Admin grant role API | Done (`POST /admin/users/grant`) |
+| Admin plant-admin list + soft revoke | Done (`GET /admin/users`, `POST …/revoke`) |
+| Plant catalog (`PLANTS_MANAGE`) | Done |
 | Permission tables + SUB_ADMIN | Done (SUB_ADMIN deferred in v1 policy) |
 | `seed_super_admin.py` bootstrap | Done |
-| Admin Portal React UI | **Pending** |
-| Grant admin role UI (search emp → PLANT_ADMIN + password) | **Pending** (API: SUPER only, PLANT_ADMIN target) |
-| SDK STATE 3 two-button overlay | **Pending** |
-| Path B `/kiosk/admin-*` + SDK STATE 4–5 | **Not built** |
+| Admin Portal React UI | **Done** — review, grant, plant admins, plants |
+| Grant admin role UI | **Done** (worker-first; plant from employee) |
+| SUPER plant workspace lens | **Done** (client sessionStorage; `?plantId=`) |
+| SDK STATE 3 two-button overlay | **Done** |
+| Path B `/kiosk/admin-*` + SDK STATE 4–5 | **Done** |
+| Auto-ungrant on employee leave | Service ready; API caller deferred |
 | `session_id` on auth/register wire-up | Deferred |
 
-**Alembic head:** `20260831_0007`
+**Alembic head:** `20260903_0010`
+
+See `PROJECT_CONTEXT.md` sections **Work completed 2026-09-02 / 09-03 / 09-04**.
 
 ---
 
 ## 10. Summary for Cursor / Any Developer
 
 1. **Path A (built):** Registration-first kiosk intake — Plant + ID + Name + face → PENDING → plant admin approves against offline HR → `employees` + `enrollments` created.
-2. **Admin as employee:** One `employee_id`; face login = `enrollments`; desk/kiosk admin = `admin_roles` password. Provision worker first, grant admin second.
-3. **Path B (planned):** Kiosk admin password session → batch fresh captures → ACTIVE immediately — separate from Path A; read sections 5–6 before implementing.
+2. **Admin as employee:** One `employee_id`; face login = `enrollments`; desk/kiosk admin = `admin_roles` password. Provision worker first, grant admin second; SUPER can soft-ungrant plant admins.
+3. **Path B (built):** Kiosk admin password session → batch fresh captures → ACTIVE immediately — separate from Path A.
 4. **Mendix unchanged.** SDK owns all overlay UI. Backend owns all DB and decisions.
 
-When in doubt, read `docs/architecture/registration-flow.md` and `PROJECT_CONTEXT.md` (section **Work completed 2026-08-29**).
+When in doubt, read `docs/architecture/registration-flow.md` and `PROJECT_CONTEXT.md` (latest **Work completed** sections).

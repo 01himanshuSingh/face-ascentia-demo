@@ -647,7 +647,7 @@ Workers are **not** pre-seeded — enroll via test harness Path A (register → 
 - Tunnel port **5173**; `VITE_API_BASE_URL=/api` so device hits Vite proxy → backend on laptop
 - Do not use `localhost:8000` on Android — use same-origin `/api` or separate backend ngrok tunnel
 
-### Known limitations (updated 2026-09-01)
+### Known limitations (updated 2026-09-04)
 
 | Topic | Status |
 |-------|--------|
@@ -658,8 +658,11 @@ Workers are **not** pre-seeded — enroll via test harness Path A (register → 
 | SDK STATE 3–5 overlays | **Done** |
 | Enrollment face preview | **Done** (SDK-only, enrollment flows) |
 | Admin Portal grant PLANT_ADMIN UI | **Done (2026-09-02)** — M6–M8 + employee-derived plant + block re-grant |
+| Plant catalog (create / update / soft-deactivate) | **Done (2026-09-03)** — `PLANTS_MANAGE` + Plants tab |
+| SUPER plant workspace lens | **Done** — client `sessionStorage` (`faceAuth.adminWorkspacePlantId`); not stored in server admin session |
+| Plant-admin roster + ungrant | **Done (2026-09-04)** — SUPER only; soft `is_active=false` |
+| Auto-ungrant on employee leave | Service ready (`auto_ungrant_for_employee`); **no employee-update API caller yet** |
 | Mendix npm package publish | Build + `npm pack` ready; Mendix integration **pending** |
-| `AGENTS.md` | Update grant/RBAC rows to match 2026-09-02 (portal grant UI done) |
 
 ## Work completed 2026-09-02 — Admin grant RBAC, portal M6–M8, employee-derived plant
 
@@ -716,12 +719,100 @@ Plant admins can grant `PLANT_ADMIN` within their own plant. Admin Portal grant 
 
 ### Next steps (after 2026-09-02)
 
-1. Update `AGENTS.md` grant policy + M6–M8 status
+1. ~~Update `AGENTS.md` grant policy + M6–M8 status~~ → superseded by 2026-09-03/04 sections below
 2. Mendix SDK `.tgz` handoff + integration
 3. SDK capture profiles for Android kiosk
-4. Production: rate limit login/auth, deploy runbook, optional Redis sessions
-5. Backend pytest for grant + kiosk admin routes
+4. Production: rate limit login/auth (~20 attempts / employee / 5 min recommended), deploy runbook, optional Redis sessions
+5. Backend pytest for grant + revoke + plant catalog + kiosk admin routes
 6. Future: dynamic RBAC UI (edit `admin_role_permissions`), audit read API
+7. Wire `auto_ungrant_for_employee` when employee INACTIVE / plant-transfer API exists
+
+## Work completed 2026-09-03 — Plant catalog + SUPER workspace lens
+
+Plant workspace is the admin desk boundary. SUPER uses a **client-only plant lens** (sessionStorage); PLANT_ADMIN stays fixed to `session.plant_id`. Catalog mutations require `PLANTS_MANAGE`. Soft-deactivate only — no hard delete of plants.
+
+### Backend — plant catalog
+
+| Area | Change | Status |
+|------|--------|--------|
+| Permission `PLANTS_MANAGE` | Enum + migrations `0009` (SUPER) / `0010` (PLANT_ADMIN backfill) | Done |
+| Audit | `PLANT_CREATE` / `PLANT_UPDATE` / `PLANT_DEACTIVATE` | Done |
+| Routes | `admin_plants.py` — list / create / update / soft-deactivate | Done |
+| Scoping | Create/deactivate = global session (`plant_id is None`); plant-scoped list/update own plant | Done |
+
+### Admin Portal — Plants tab + workspace
+
+| Area | Files / behavior | Status |
+|------|------------------|--------|
+| Workspace hook | `usePlantWorkspace` — key `faceAuth.adminWorkspacePlantId` | Done |
+| Selector | `PlantWorkspaceSelector` on Review (+ later Plant admins) for SUPER | Done |
+| Catalog UI | `PlantCatalogPanel` / table / form dialog + `usePlantCatalog` | Done |
+| API query | Workspace sent as `?plantId=` — **not** written into server admin session | Done |
+| Login permissions | `session.permissions` → `canManagePlants` / `canGrantPlantAdmin` / etc. | Done |
+| Toasts | `ToastProvider` + `formatAdminError` on session/queue/grant/catalog | Done |
+
+**Design lock:** Do not put SUPER plant toggle into the server admin session. Lens is UI/query only.
+
+### Alembic head (after this phase)
+
+`20260903_0010` (after `0009` `PLANTS_MANAGE` for SUPER)
+
+## Work completed 2026-09-04 — Plant-admin roster + soft ungrant
+
+Closes the grant lifecycle for v1: SUPER can **list** and **ungrant** `PLANT_ADMIN` rows inside the active plant workspace. PLANT_ADMIN peers cannot ungrant each other. Ungrant is soft (`admin_roles.is_active=false`); `employees` + `enrollments` stay unchanged so face login still works.
+
+### Policy (v1)
+
+| Rule | Decision |
+|------|----------|
+| Who lists / revokes | Global SUPER session (`session.plant_id is None`) + `ADMIN_GRANT_PLANT_ADMIN` |
+| Who cannot | PLANT_ADMIN — no peer ungrant; no Plant admins tab |
+| Revoke effect | Soft deactivate admin role + audit `REVOKE`; invalidate that employee’s admin sessions |
+| Self-revoke | Forbidden |
+| SUPER rows | Never auto-revoked; not in plant roster |
+| Auto-ungrant | `auto_ungrant_for_employee` ready for leave/INACTIVE (plant-scoped rows only) — **caller deferred** |
+
+### Backend — list + revoke
+
+| Area | Change | Status |
+|------|--------|--------|
+| `admin_role_repository` | `list_active_by_plant`, counts, deactivate helpers | Done |
+| `admin_rbac` | `assert_can_list_plant_admins`, `assert_can_revoke_admin`, revocable role matrix | Done |
+| `admin_users` | `list_plant_admins`, `revoke_plant_admin`, `auto_ungrant_for_employee` | Done |
+| `admin_auth` | `invalidate_sessions_for_employee` on revoke | Done |
+| Schemas | `AdminUserItem`, list/revoke DTOs, `ADMIN_NOT_FOUND` | Done |
+| `GET /admin/users` | `?plantId=&q=&limit=&offset=` | Done |
+| `POST /admin/users/{employee_id}/revoke` | Body: plant + optional reason | Done |
+
+### Admin Portal — Plant admins tab
+
+| Area | Files / behavior | Status |
+|------|------------------|--------|
+| Gate | `canRevokePlantAdmins(session)` — SUPER + grant permission | Done |
+| Hook | `usePlantAdmins` — roster query + revoke mutation + toasts | Done |
+| UI | `PlantAdminsPanel`, `PlantAdminsTable`, `RevokeAdminDialog` | Done |
+| `App.tsx` | Tab **Plant admins**; workspace selector on Review + Admins | Done |
+| API | `listPlantAdmins`, `revokePlantAdmin` in `adminApi.ts` | Done |
+
+### Manual test checklist (roster + ungrant)
+
+```text
+1. alembic upgrade head (0010)
+2. SUPER001 login → select plant workspace → Plant admins tab visible
+3. Search PLANT_ADMIN in that plant → Ungrant → toast + row gone
+4. Revoked admin cannot Admin Portal login; face auth still works if enrolled
+5. ADMIN001 (PLANT_ADMIN) → no Plant admins tab; revoke API returns 403
+6. SUPER cannot revoke self
+```
+
+### Next steps (after 2026-09-04)
+
+1. Mendix SDK `.tgz` handoff + integration
+2. SDK capture profiles for Android kiosk
+3. Production hardening: per-employee auth rate limit, deploy runbook, optional Redis sessions
+4. Backend pytest: grant, revoke, plant catalog, Path B kiosk admin
+5. Employee lifecycle API → call `auto_ungrant_for_employee` on INACTIVE / plant leave
+6. Future: dynamic RBAC UI, audit read API, optional URL workspace slug (still client lens)
 
 ## Technology Stack
 

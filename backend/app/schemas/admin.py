@@ -21,6 +21,7 @@ class AdminErrorCode(StrEnum):
     PERMISSION_DENIED = "PERMISSION_DENIED"
     EMPLOYEE_NOT_FOUND = "EMPLOYEE_NOT_FOUND"
     ADMIN_ALREADY_EXISTS = "ADMIN_ALREADY_EXISTS"
+    ADMIN_NOT_FOUND = "ADMIN_NOT_FOUND"
     MISSING_DECISION_REASON = "MISSING_DECISION_REASON"
     # Plant catalog (PLANTS_MANAGE)
     PLANT_NOT_FOUND = "PLANT_NOT_FOUND"
@@ -114,6 +115,55 @@ class AdminGrantResponse(BaseModel):
     employee_id: str = Field(..., serialization_alias="employeeId")
     role: str
     plant_id: UUID | None = Field(default=None, serialization_alias="plantId")
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# Plant admin roster + revoke (SUPER workspace; scalable for future SUB_ADMIN)
+# ---------------------------------------------------------------------------
+
+
+class AdminUserItem(BaseModel):
+    """Active plant-scoped admin row for roster / search."""
+
+    model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
+
+    employee_id: str = Field(..., serialization_alias="employeeId")
+    full_name: str = Field(..., serialization_alias="fullName")
+    role: str
+    plant_id: UUID = Field(..., serialization_alias="plantId")
+    granted_by: str | None = Field(default=None, serialization_alias="grantedBy")
+    created_at: str = Field(..., serialization_alias="createdAt")
+
+
+class AdminUserListResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
+
+    items: list[AdminUserItem]
+    total: int
+    plant_id: UUID = Field(..., serialization_alias="plantId")
+
+
+class AdminRevokeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    plant_id: UUID = Field(
+        ...,
+        validation_alias="plantId",
+        description="Active plant workspace — must match target admin_roles.plant_id.",
+    )
+    reason: str | None = Field(
+        default=None,
+        description="Optional ops note (stored in audit metadata).",
+    )
+
+
+class AdminRevokeResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
+
+    employee_id: str = Field(..., serialization_alias="employeeId")
+    role: str
+    plant_id: UUID = Field(..., serialization_alias="plantId")
     message: str
 
 

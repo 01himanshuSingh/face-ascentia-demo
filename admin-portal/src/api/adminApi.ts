@@ -7,17 +7,21 @@
  *   GET  /admin/registrations/{id}/image
  *   POST /admin/registrations/{id}/approve
  *   POST /admin/registrations/{id}/reject
+ *   GET  /admin/users?plantId=&q=              (plant admin roster — SUPER)
+ *   POST /admin/users/{employeeId}/revoke      (soft-ungrant in workspace)
  *   POST /admin/users/grant
  *   GET  /admin/users/grant-preview/{employeeId}
  *   GET  /plants                               (active only — workspace selector / kiosk)
  *   GET  /admin/plants                         (catalog incl. inactive — PLANTS_MANAGE)
  *   POST /admin/plants                         (create)
- *   PATCH /admin/plants/{plantId}              (rename / soft-deactivate / reactivate)
+ *   GET  /admin/audit?plantId=&category=&q=&cursor=  (AUDIT_VIEW; text only)
  *
  * Plant layers (do not merge)
  * ---------------------------
  *   A) Workspace lens — which plant am I working in? (sessionStorage + GET /plants)
  *   B) Plant catalog  — create / update / soft-deactivate (GET/POST/PATCH /admin/plants)
+ *   C) Plant admins   — list/search/ungrant in workspace (GET/POST /admin/users*)
+ *   D) Audit log      — plant-scoped keyset timeline (GET /admin/audit)
  *
  * Pending queue follows active plant workspace (not client-side row filter):
  *   PLANT_ADMIN — session.plantId (fixed)
@@ -45,6 +49,7 @@ export const AdminPermission = {
   REGISTRATION_REJECT: "REGISTRATION_REJECT",
   ADMIN_GRANT_PLANT_ADMIN: "ADMIN_GRANT_PLANT_ADMIN",
   PLANTS_MANAGE: "PLANTS_MANAGE",
+  AUDIT_VIEW: "AUDIT_VIEW",
 } as const;
 
 export type AdminPermissionCode =
@@ -104,6 +109,31 @@ export function canCreatePlants(session: AdminSession): boolean {
 
 export function canDeactivatePlants(session: AdminSession): boolean {
   return canCreatePlants(session);
+}
+
+/**
+ * UI gate for Plant admins tab (list + ungrant).
+ * v1: global session (plantId null) + ADMIN_GRANT_PLANT_ADMIN — SUPER only.
+ * Plant admins cannot ungrant peers. Backend still enforces.
+ */
+export function canRevokePlantAdmins(session: AdminSession): boolean {
+  return (
+    session.plantId == null &&
+    hasPermission(session, AdminPermission.ADMIN_GRANT_PLANT_ADMIN)
+  );
+}
+
+/**
+ * UI gate for Audit log tab — plant-scoped timeline (no images in list).
+ * Backend still enforces AUDIT_VIEW + plant scope on GET /admin/audit.
+ */
+export function canViewAudit(session: AdminSession): boolean {
+  return hasPermission(session, AdminPermission.AUDIT_VIEW);
+}
+
+/** Face peek in APPROVE/kiosk audit dialog — separate from AUDIT_VIEW. */
+export function canViewAuditEnrollmentImage(session: AdminSession): boolean {
+  return hasPermission(session, AdminPermission.REGISTRATION_VIEW_IMAGE);
 }
 
 /**
@@ -186,6 +216,56 @@ export type AdminGrantResult = {
   employeeId: string;
   role: string;
   plantId: string | null;
+  message: string;
+};
+
+/** Active plant-scoped admin for SUPER roster. */
+export type AdminUserItem = {
+  employeeId: string;
+  fullName: string;
+  role: string;
+  plantId: string;
+  grantedBy: string | null;
+  createdAt: string;
+};
+
+/** Portal category chips → GET /admin/audit?category= */
+export type AuditCategory =
+  | "all"
+  | "approved"
+  | "rejected"
+  | "admins"
+  | "kiosk"
+  | "plants";
+
+export type AuditLogItem = {
+  logId: string;
+  createdAt: string;
+  actorId: string | null;
+  actorRole: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  plantId: string;
+  metadata: Record<string, unknown> | null;
+};
+
+export type AuditLogListResult = {
+  items: AuditLogItem[];
+  plantId: string;
+  nextCursor: string | null;
+};
+
+export type AdminUserListResult = {
+  items: AdminUserItem[];
+  total: number;
+  plantId: string;
+};
+
+export type AdminRevokeResult = {
+  employeeId: string;
+  role: string;
+  plantId: string;
   message: string;
 };
 
@@ -639,6 +719,142 @@ export async function grantPlantAdmin(
         password,
       }),
     },
+    token,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plant admin roster + revoke (Layer C — workspace plantId; v1 SUPER)
+// ---------------------------------------------------------------------------
+
+/** GET /admin/users?plantId=&q= — active PLANT_ADMINs in workspace. */
+export async function listPlantAdmins(
+  token: string,
+  plantId: string,
+  options?: { q?: string; limit?: number; offset?: number },
+): Promise<AdminUserListResult> {
+  const trimmedPlant = plantId.trim();
+  if (!trimmedPlant) {
+    throw new AdminApiClientError(
+      {
+        detail: "plantId is required.",
+        code: "PLANT_ACCESS_DENIED",
+      },
+      400,
+    );
+  }
+
+  const params = new URLSearchParams();
+  params.set("plantId", trimmedPlant);
+  const q = options?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.offset != null) {
+    params.set("offset", String(options.offset));
+  }
+
+  return requestJson<AdminUserListResult>(
+    `/admin/users?${params.toString()}`,
+    { method: "GET" },
+    token,
+  );
+}
+
+/**
+ * POST /admin/users/{employeeId}/revoke — soft-ungrant in workspace.
+ * Employee + face enrollment stay; portal login stops.
+ */
+export async function revokePlantAdmin(
+  token: string,
+  employeeId: string,
+  plantId: string,
+  reason?: string,
+): Promise<AdminRevokeResult> {
+  const normalizedId = employeeId.trim();
+  const trimmedPlant = plantId.trim();
+  if (!normalizedId || !trimmedPlant) {
+    throw new AdminApiClientError(
+      {
+        detail: "employeeId and plantId are required.",
+        code: "INVALID_CREDENTIALS",
+      },
+      400,
+    );
+  }
+
+  return requestJson<AdminRevokeResult>(
+    `/admin/users/${encodeURIComponent(normalizedId)}/revoke`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        plantId: trimmedPlant,
+        reason: reason?.trim() || null,
+      }),
+    },
+    token,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (Layer D — plant workspace; text timeline; keyset cursor)
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /admin/audit — plant-scoped compliance feed (no images in payload).
+ * Face peek for APPROVE/kiosk uses fetchRegistrationImage(requestId) separately.
+ */
+export async function listAuditLogs(
+  token: string,
+  plantId: string,
+  options?: {
+    category?: AuditCategory;
+    q?: string;
+    limit?: number;
+    cursor?: string | null;
+    from?: string;
+    to?: string;
+  },
+): Promise<AuditLogListResult> {
+  const trimmedPlant = plantId.trim();
+  if (!trimmedPlant) {
+    throw new AdminApiClientError(
+      {
+        detail: "plantId is required.",
+        code: "PLANT_ACCESS_DENIED",
+      },
+      400,
+    );
+  }
+
+  const params = new URLSearchParams();
+  params.set("plantId", trimmedPlant);
+  if (options?.category) {
+    params.set("category", options.category);
+  }
+  const q = options?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.cursor) {
+    params.set("cursor", options.cursor);
+  }
+  if (options?.from) {
+    params.set("from", options.from);
+  }
+  if (options?.to) {
+    params.set("to", options.to);
+  }
+
+  return requestJson<AuditLogListResult>(
+    `/admin/audit?${params.toString()}`,
+    { method: "GET" },
     token,
   );
 }

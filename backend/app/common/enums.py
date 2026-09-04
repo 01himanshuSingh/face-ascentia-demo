@@ -55,6 +55,10 @@ class AdminPermissionCode(StrEnum):
     # Role-agnostic permission: v1 default maps to SUPER_ADMIN (all permissions).
     # Future roles can receive PLANTS_MANAGE via admin_role_permissions without a new enum.
     PLANTS_MANAGE = "PLANTS_MANAGE"
+    # Read-only plant-scoped audit timeline (GET /admin/audit).
+    # Dedicated so audit UI can be revoked without removing registration review.
+    # No images in this permission — face bytes stay on registration image routes.
+    AUDIT_VIEW = "AUDIT_VIEW"
 
 
 # v1 default permission sets copied to admin_role_permissions on grant / seed.
@@ -63,7 +67,7 @@ class AdminPermissionCode(StrEnum):
 #   SUPER_ADMIN  — full catalog (every AdminPermissionCode); all plants;
 #                  only global session (plant_id NULL) may create / deactivate plants
 #   PLANT_ADMIN  — own plant only; registration review + grant + PLANTS_MANAGE
-#                  (read/update own plant; cannot create another workspace)
+#                  + AUDIT_VIEW (read/update own plant; cannot create another workspace)
 #   SUB_ADMIN    — reserved; defaults kept for future phase; grant API rejects in v1
 #
 # Dynamic RBAC UI (future): same tables; edit admin_role_permissions per role/admin.
@@ -80,6 +84,7 @@ ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCod
             AdminPermissionCode.ADMIN_GRANT_PLANT_ADMIN,
             # Own plant catalog read/update only — create/deactivate blocked in plant_catalog.
             AdminPermissionCode.PLANTS_MANAGE,
+            AdminPermissionCode.AUDIT_VIEW,
         }
     ),
     AdminRoleType.SUB_ADMIN: frozenset(
@@ -94,6 +99,20 @@ ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCod
 
 
 class AuditAction(StrEnum):
+    """Actions written to ``audit_log.action`` (append-only).
+
+    Portal v1 default feed (category chips) — compliance decisions only:
+      approved      → APPROVE
+      rejected      → REJECT
+      admins        → ADMIN_GRANT, REVOKE
+      kiosk         → ADMIN_KIOSK_ENROLL
+      plants        → PLANT_CREATE, PLANT_UPDATE, PLANT_DEACTIVATE
+
+    Stored but not in default portal feed (advanced / forensics later):
+      VIEW_IMAGE — noisy PII access trail
+      LOGIN      — high volume auth noise
+    """
+
     LOGIN = "LOGIN"
     APPROVE = "APPROVE"
     REJECT = "REJECT"

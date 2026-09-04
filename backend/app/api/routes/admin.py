@@ -1,25 +1,29 @@
-"""Admin Portal HTTP routes — auth, plant-workspace review, grant.
+"""Admin Portal HTTP routes — auth, plant-workspace review, grant, revoke.
 
 Layering
 --------
 Routes stay thin: session dependency + schema bind → services.
-Plant workspace scope and RBAC live in services (admin_review, admin_grant, admin_rbac).
+Plant workspace scope and RBAC live in services
+(admin_review, admin_grant, admin_users, admin_rbac).
 
 Plant catalog CRUD (``GET/POST/PATCH /admin/plants``) lives in ``admin_plants.py``
 so registration-review and plant-catalog stay separate bounded contexts.
 
-Plant workspace (pending queue)
--------------------------------
+Audit timeline (``GET /admin/audit``) lives in ``admin_audit.py`` — read-only,
+plant-scoped keyset feed (``AUDIT_VIEW``).
+
+Plant workspace (pending queue + admin roster)
+---------------------------------------------
   GET /admin/registrations/pending?plantId=<uuid>
+  GET /admin/users?plantId=<uuid>&q=
 
-  SUPER_ADMIN  — plantId = active plant workspace (omit = all plants, transitional)
-  PLANT_ADMIN  — plantId optional; must match session.plant_id if sent
+  Client sends active plant workspace as ``plantId`` (browser sessionStorage /
+  query). Does not rewrite admin_roles.plant_id.
 
-Does not rewrite admin_roles.plant_id. UI selector is a view lens only.
-
-Grant (worker-first)
---------------------
-  Plant for PLANT_ADMIN is derived from employees.plant_id (omit plantId on grant body).
+Grant / revoke
+--------------
+  POST /admin/users/grant              — worker-first; plant from employee row
+  POST /admin/users/{employeeId}/revoke — soft-ungrant in workspace (v1: SUPER)
 """
 
 from __future__ import annotations
@@ -41,6 +45,9 @@ from app.schemas.admin import (
     AdminGrantResponse,
     AdminLoginRequest,
     AdminLoginResponse,
+    AdminRevokeRequest,
+    AdminRevokeResponse,
+    AdminUserListResponse,
     RegistrationDecisionRequest,
     RegistrationDecisionResponse,
     RegistrationQueueResponse,
@@ -48,6 +55,7 @@ from app.schemas.admin import (
 from app.services.admin_auth import AdminSession, get_shared_admin_auth_service
 from app.services.admin_grant import get_shared_admin_grant_service
 from app.services.admin_review import get_shared_admin_review_service
+from app.services.admin_users import get_shared_admin_users_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -134,6 +142,77 @@ def grant_admin_role(
         role=role,
         plant_id=body.plant_id,
         password=body.password,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Plant admin roster + revoke (workspace plantId; v1 SUPER / global only)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/users",
+    response_model=AdminUserListResponse,
+    responses={
+        401: {"model": AdminErrorResponse},
+        403: {"model": AdminErrorResponse},
+        404: {"model": AdminErrorResponse},
+    },
+)
+def list_plant_admins(
+    plant_id: Annotated[
+        uuid.UUID,
+        Query(
+            alias="plantId",
+            description=(
+                "Active plant workspace. Returns active PLANT_ADMIN rows for "
+                "this plant only (v1: global/SUPER sessions)."
+            ),
+        ),
+    ],
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(get_admin_session),
+    q: Annotated[
+        str | None,
+        Query(
+            description="Optional search on employeeId or full name.",
+        ),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AdminUserListResponse:
+    return get_shared_admin_users_service().list_plant_admins(
+        db,
+        session,
+        plant_id=plant_id,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/users/{employee_id}/revoke",
+    response_model=AdminRevokeResponse,
+    responses={
+        401: {"model": AdminErrorResponse},
+        403: {"model": AdminErrorResponse},
+        404: {"model": AdminErrorResponse},
+    },
+)
+def revoke_plant_admin(
+    employee_id: str,
+    body: AdminRevokeRequest,
+    db: Session = Depends(get_db),
+    session: AdminSession = Depends(get_admin_session),
+) -> AdminRevokeResponse:
+    """Soft-ungrant plant admin in the given workspace (employee stays a worker)."""
+    return get_shared_admin_users_service().revoke_plant_admin(
+        db,
+        session,
+        employee_id=employee_id,
+        plant_id=body.plant_id,
+        reason=body.reason,
     )
 
 

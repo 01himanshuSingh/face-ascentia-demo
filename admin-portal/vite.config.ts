@@ -11,6 +11,8 @@ export default defineConfig({
   server: {
     port: 5174,
     host: true,
+    // ngrok free/paid hostnames (same allowlist as test-harness)
+    allowedHosts: [".ngrok-free.dev", ".ngrok.io", ".ngrok.app"],
     proxy: {
       "/api": {
         target: "http://localhost:8000",

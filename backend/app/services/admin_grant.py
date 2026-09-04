@@ -4,6 +4,12 @@ Plant for PLANT_ADMIN is always derived from ``employees.plant_id`` — granters
 cannot assign a worker to a different plant at grant time. SUPER may grant
 across plants by choosing any enrolled employee; PLANT_ADMIN only employees
 in ``session.plant_id`` (enforced via admin_rbac).
+
+Re-grant after soft ungrant
+---------------------------
+``admin_roles.employee_id`` is UNIQUE. Ungrant sets ``is_active=false`` and
+keeps the row. Grant must reactivate that row (new password + permissions),
+not INSERT — otherwise PostgreSQL raises UniqueViolation.
 """
 
 from __future__ import annotations
@@ -144,18 +150,34 @@ class AdminGrantService:
         _assert_not_already_active_admin(db, normalized_id)
 
         password_hash = AdminAuthService.hash_password(password)
+        existing_row = admin_role_repository.get_by_employee_id(db, normalized_id)
+        reactivated = False
 
-        admin_row = AdminRole(
-            employee_id=normalized_id,
-            plant_id=effective_plant_id,
-            role=role.value,
-            password_hash=password_hash,
-            is_active=True,
-            granted_by=session.employee_id,
-        )
-        db.add(admin_row)
-        db.flush()
-        db.refresh(admin_row)
+        if existing_row is None:
+            admin_row = AdminRole(
+                employee_id=normalized_id,
+                plant_id=effective_plant_id,
+                role=role.value,
+                password_hash=password_hash,
+                is_active=True,
+                granted_by=session.employee_id,
+            )
+            db.add(admin_row)
+            db.flush()
+            db.refresh(admin_row)
+        else:
+            # Soft-ungranted (or stale inactive) row — reuse unique employee_id.
+            admin_role_repository.clear_permissions(db, existing_row.role_id)
+            admin_row = admin_role_repository.reactivate(
+                db,
+                existing_row,
+                plant_id=effective_plant_id,
+                role=role.value,
+                password_hash=password_hash,
+                granted_by=session.employee_id,
+            )
+            reactivated = True
+
         assign_default_permissions(db, role_id=admin_row.role_id, role=role)
 
         audit_repository.create_entry(
@@ -166,24 +188,33 @@ class AdminGrantService:
             target_type="admin_role",
             target_id=normalized_id,
             plant_id=effective_plant_id,
-            metadata={"granted_role": role.value},
+            metadata={
+                "granted_role": role.value,
+                "reactivated": reactivated,
+            },
         )
 
         db.commit()
 
         logger.info(
-            "admin_grant | target=%s | role=%s | plant=%s | granter=%s",
+            "admin_grant | target=%s | role=%s | plant=%s | granter=%s | reactivated=%s",
             normalized_id,
             role.value,
             effective_plant_id,
             session.employee_id,
+            reactivated,
         )
 
+        message = (
+            f"Admin role {role.value} re-granted."
+            if reactivated
+            else f"Admin role {role.value} granted."
+        )
         return AdminGrantResponse(
             employee_id=normalized_id,
             role=role.value,
             plant_id=effective_plant_id,
-            message=f"Admin role {role.value} granted.",
+            message=message,
         )
 
 

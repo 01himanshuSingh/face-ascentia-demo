@@ -112,6 +112,20 @@ class AdminAuthService:
         if normalized:
             self._sessions.pop(normalized, None)
 
+    def invalidate_sessions_for_employee(self, employee_id: str) -> int:
+        """Drop all in-memory portal sessions for an employee (after ungrant)."""
+        normalized = (employee_id or "").strip()
+        if not normalized:
+            return 0
+        to_drop = [
+            token
+            for token, session in self._sessions.items()
+            if session.employee_id == normalized
+        ]
+        for token in to_drop:
+            self._sessions.pop(token, None)
+        return len(to_drop)
+
     @staticmethod
     def hash_password(password: str) -> str:
         return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
