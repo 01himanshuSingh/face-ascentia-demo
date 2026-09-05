@@ -116,7 +116,7 @@ class AdminUsersService:
         *,
         plant_id: uuid.UUID,
         q: str | None = None,
-        limit: int = 50,
+        limit: int = 15,
         offset: int = 0,
     ) -> AdminUserListResponse:
         """Active admins for one plant workspace (search + pagination)."""
@@ -126,13 +126,15 @@ class AdminUsersService:
         role_values = frozenset(
             role.value for role in revocable_roles_for_session(session)
         )
+        safe_limit = max(1, min(limit, 200))
+        safe_offset = max(0, offset)
         items = admin_role_repository.list_active_by_plant(
             db,
             plant_id,
             q=q,
             roles=role_values,
-            limit=limit,
-            offset=offset,
+            limit=safe_limit,
+            offset=safe_offset,
         )
         total = admin_role_repository.count_active_by_plant(
             db,
@@ -144,6 +146,8 @@ class AdminUsersService:
             items=[_to_user_item(row) for row in items],
             total=total,
             plant_id=plant_id,
+            limit=safe_limit,
+            offset=safe_offset,
         )
 
     def revoke_plant_admin(

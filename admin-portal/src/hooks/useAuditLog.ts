@@ -1,15 +1,15 @@
 /**
  * Plant-scoped audit timeline (AUDIT_VIEW).
  *
- * Text feed only — faces load on demand in AuditEventDialog via
- * fetchRegistrationImage for APPROVE / ADMIN_KIOSK_ENROLL.
- * Keyset pagination via nextCursor (Load more).
+ * Text feed only — faces load on demand in AuditEventDialog.
+ * Offset pagination (15 / page) across all category chips.
  */
 
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 
 import {
+  AUDIT_PAGE_SIZE,
   listAuditLogs,
   type AdminSession,
   type AuditCategory,
@@ -35,7 +35,8 @@ export function useAuditLog({
   const token = session?.adminSessionToken ?? null;
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [category, setCategory] = useState<AuditCategory>("all");
+  const [category, setCategoryState] = useState<AuditCategory>("all");
+  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [toastedListAt, setToastedListAt] = useState(0);
@@ -47,24 +48,31 @@ export function useAuditLog({
     return () => window.clearTimeout(handle);
   }, [searchInput]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [workspacePlantId, category, debouncedQ]);
+
+  const setCategory = useCallback((next: AuditCategory) => {
+    setCategoryState(next);
+  }, []);
+
   const listEnabled = enabled && Boolean(token) && Boolean(workspacePlantId);
 
-  const listQuery = useInfiniteQuery({
+  const listQuery = useQuery({
     queryKey: adminQueryKeys.audit(
       token ?? "",
       workspacePlantId ?? "",
       category,
       debouncedQ,
+      page,
     ),
-    queryFn: ({ pageParam }) =>
+    queryFn: () =>
       listAuditLogs(token!, workspacePlantId!, {
         category,
         q: debouncedQ || undefined,
-        limit: 50,
-        cursor: pageParam,
+        limit: AUDIT_PAGE_SIZE,
+        offset: (page - 1) * AUDIT_PAGE_SIZE,
       }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: listEnabled,
     meta: { onAuthFailure },
   });
@@ -90,43 +98,54 @@ export function useAuditLog({
     toastedListAt,
   ]);
 
-  const items: AuditLogItem[] = useMemo(
-    () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [listQuery.data],
-  );
+  const items: AuditLogItem[] = listQuery.data?.items ?? [];
+  const total = listQuery.data?.total ?? 0;
+  const pageSize = listQuery.data?.limit ?? AUDIT_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+
+  useEffect(() => {
+    if (total === 0) {
+      if (page !== 1) {
+        setPage(1);
+      }
+      return;
+    }
+    const maxPage = Math.max(1, Math.ceil(total / pageSize));
+    if (page > maxPage) {
+      setPage(maxPage);
+    }
+  }, [page, pageSize, total]);
 
   const refresh = useCallback(async () => {
     if (!token || !workspacePlantId) {
       return;
     }
     await queryClient.invalidateQueries({
-      queryKey: adminQueryKeys.audit(
-        token,
-        workspacePlantId,
-        category,
-        debouncedQ,
-      ),
+      queryKey: [...adminQueryKeys.all, "audit", token, workspacePlantId],
     });
-  }, [category, debouncedQ, queryClient, token, workspacePlantId]);
+  }, [queryClient, token, workspacePlantId]);
 
-  const loadMore = useCallback(async () => {
-    if (!listQuery.hasNextPage || listQuery.isFetchingNextPage) {
-      return;
-    }
-    await listQuery.fetchNextPage();
-  }, [listQuery]);
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      const clamped = Math.min(Math.max(1, nextPage), totalPages);
+      setPage(clamped);
+    },
+    [totalPages],
+  );
 
   return {
     items,
-    loading: listQuery.isLoading || (listQuery.isFetching && !listQuery.isFetchingNextPage),
-    loadingMore: listQuery.isFetchingNextPage,
-    hasMore: Boolean(listQuery.hasNextPage),
+    total,
+    page,
+    pageSize,
+    totalPages,
+    goToPage,
+    loading: listQuery.isLoading || listQuery.isFetching,
     category,
     setCategory,
     searchInput,
     setSearchInput,
     needsPlant: !workspacePlantId,
     refresh,
-    loadMore,
   };
 }

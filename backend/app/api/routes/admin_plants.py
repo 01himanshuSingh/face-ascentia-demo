@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.routes.admin import get_admin_session
@@ -47,8 +47,15 @@ router = APIRouter(prefix="/admin", tags=["admin-plants"])
 def list_admin_plants(
     db: Session = Depends(get_db),
     session: AdminSession = Depends(get_admin_session),
+    limit: int = Query(15, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ) -> AdminPlantListResponse:
-    return get_shared_plant_catalog_service().list_catalog(db, session)
+    return get_shared_plant_catalog_service().list_catalog(
+        db,
+        session,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(

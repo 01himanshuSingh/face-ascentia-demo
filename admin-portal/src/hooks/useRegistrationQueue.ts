@@ -6,6 +6,7 @@ import {
   fetchRegistrationImage,
   listPending,
   rejectRegistration,
+  PENDING_PAGE_SIZE,
   type AdminSession,
 } from "../api/adminApi";
 import { useToast } from "../components/toast/ToastProvider";
@@ -29,15 +30,24 @@ export function useRegistrationQueue({
   const toast = useToast();
   const token = session?.adminSessionToken ?? null;
 
+  const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toastedPendingAt, setToastedPendingAt] = useState(0);
   const [toastedImageAt, setToastedImageAt] = useState(0);
 
+  useEffect(() => {
+    setPage(1);
+  }, [workspacePlantId]);
+
   const pendingQuery = useQuery({
-    queryKey: adminQueryKeys.pending(token ?? "", workspacePlantId),
-    queryFn: () => listPending(token!, workspacePlantId),
+    queryKey: adminQueryKeys.pending(token ?? "", workspacePlantId, page),
+    queryFn: () =>
+      listPending(token!, workspacePlantId, {
+        limit: PENDING_PAGE_SIZE,
+        offset: (page - 1) * PENDING_PAGE_SIZE,
+      }),
     enabled: enabled && Boolean(token) && Boolean(workspacePlantId),
     meta: { onAuthFailure },
   });
@@ -63,7 +73,23 @@ export function useRegistrationQueue({
     toastedPendingAt,
   ]);
 
-  const items = pendingQuery.data ?? [];
+  const items = pendingQuery.data?.items ?? [];
+  const total = pendingQuery.data?.total ?? 0;
+  const pageSize = pendingQuery.data?.limit ?? PENDING_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+
+  useEffect(() => {
+    if (total === 0) {
+      if (page !== 1) {
+        setPage(1);
+      }
+      return;
+    }
+    const maxPage = Math.max(1, Math.ceil(total / pageSize));
+    if (page > maxPage) {
+      setPage(maxPage);
+    }
+  }, [page, pageSize, total]);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -121,7 +147,7 @@ export function useRegistrationQueue({
       return;
     }
     await queryClient.invalidateQueries({
-      queryKey: adminQueryKeys.pending(token, workspacePlantId),
+      queryKey: [...adminQueryKeys.all, "pending", token, workspacePlantId ?? "all"],
     });
   }, [queryClient, token, workspacePlantId]);
 
@@ -188,6 +214,14 @@ export function useRegistrationQueue({
     [rejectMutation, selectedId, token],
   );
 
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      const clamped = Math.min(Math.max(1, nextPage), totalPages);
+      setPage(clamped);
+    },
+    [totalPages],
+  );
+
   const decisionBusy = approveMutation.isPending || rejectMutation.isPending;
 
   const error =
@@ -205,6 +239,11 @@ export function useRegistrationQueue({
 
   return {
     items,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    goToPage,
     loading: pendingQuery.isLoading || pendingQuery.isFetching,
     error,
     selected,

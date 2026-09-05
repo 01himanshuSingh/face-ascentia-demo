@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.common.enums import RegistrationSource, RegistrationStatus
@@ -131,7 +131,12 @@ def create_pending(
 def list_pending_by_plant(
     db: Session,
     plant_id: uuid.UUID,
+    *,
+    limit: int = 15,
+    offset: int = 0,
 ) -> list[RegistrationRequest]:
+    safe_limit = max(1, min(limit, 100))
+    safe_offset = max(0, offset)
     stmt = (
         select(RegistrationRequest)
         .where(
@@ -139,17 +144,49 @@ def list_pending_by_plant(
             RegistrationRequest.status == RegistrationStatus.PENDING.value,
         )
         .order_by(RegistrationRequest.captured_at.desc())
+        .offset(safe_offset)
+        .limit(safe_limit)
     )
     return list(db.scalars(stmt).all())
 
 
-def list_pending_all(db: Session) -> list[RegistrationRequest]:
+def count_pending_by_plant(db: Session, plant_id: uuid.UUID) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(RegistrationRequest)
+        .where(
+            RegistrationRequest.plant_id == plant_id,
+            RegistrationRequest.status == RegistrationStatus.PENDING.value,
+        )
+    )
+    return int(db.scalar(stmt) or 0)
+
+
+def list_pending_all(
+    db: Session,
+    *,
+    limit: int = 15,
+    offset: int = 0,
+) -> list[RegistrationRequest]:
+    safe_limit = max(1, min(limit, 100))
+    safe_offset = max(0, offset)
     stmt = (
         select(RegistrationRequest)
         .where(RegistrationRequest.status == RegistrationStatus.PENDING.value)
         .order_by(RegistrationRequest.plant_id, RegistrationRequest.captured_at.desc())
+        .offset(safe_offset)
+        .limit(safe_limit)
     )
     return list(db.scalars(stmt).all())
+
+
+def count_pending_all(db: Session) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(RegistrationRequest)
+        .where(RegistrationRequest.status == RegistrationStatus.PENDING.value)
+    )
+    return int(db.scalar(stmt) or 0)
 
 
 def mark_reviewed(
@@ -172,6 +209,8 @@ def mark_reviewed(
 
 
 __all__ = [
+    "count_pending_all",
+    "count_pending_by_plant",
     "create_admin_kiosk_approved",
     "create_pending",
     "get_by_id",

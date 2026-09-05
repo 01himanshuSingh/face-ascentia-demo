@@ -50,6 +50,7 @@ export const AdminPermission = {
   ADMIN_GRANT_PLANT_ADMIN: "ADMIN_GRANT_PLANT_ADMIN",
   PLANTS_MANAGE: "PLANTS_MANAGE",
   AUDIT_VIEW: "AUDIT_VIEW",
+  EMPLOYEE_REVOKE: "EMPLOYEE_REVOKE",
 } as const;
 
 export type AdminPermissionCode =
@@ -137,6 +138,14 @@ export function canViewAuditEnrollmentImage(session: AdminSession): boolean {
 }
 
 /**
+ * UI gate for Employees tab — soft-revoke ACTIVE enrolled workers.
+ * Backend still enforces EMPLOYEE_REVOKE + plant scope.
+ */
+export function canRevokeEmployees(session: AdminSession): boolean {
+  return hasPermission(session, AdminPermission.EMPLOYEE_REVOKE);
+}
+
+/**
  * Resolve plantId for pending (and later grant search).
  * SUPER: portal workspace selection. PLANT_ADMIN: session.plantId only.
  */
@@ -172,6 +181,19 @@ export type RegistrationQueueItem = {
   capturedAt: string;
 };
 
+export type RegistrationQueueResult = {
+  items: RegistrationQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export const PENDING_PAGE_SIZE = 15;
+export const EMPLOYEE_PAGE_SIZE = 15;
+export const AUDIT_PAGE_SIZE = 15;
+export const PLANT_PAGE_SIZE = 15;
+export const ADMIN_PAGE_SIZE = 15;
+
 export type RegistrationDecision = {
   requestId: string;
   employeeId: string;
@@ -193,6 +215,13 @@ export type AdminPlantItem = {
   plantName: string;
   isActive: boolean;
   createdAt: string;
+};
+
+export type AdminPlantListResult = {
+  plants: AdminPlantItem[];
+  total: number;
+  limit?: number;
+  offset?: number;
 };
 
 export type PlantCreatePayload = {
@@ -236,7 +265,8 @@ export type AuditCategory =
   | "rejected"
   | "admins"
   | "kiosk"
-  | "plants";
+  | "plants"
+  | "employees";
 
 export type AuditLogItem = {
   logId: string;
@@ -253,13 +283,49 @@ export type AuditLogItem = {
 export type AuditLogListResult = {
   items: AuditLogItem[];
   plantId: string;
+  total: number;
+  limit?: number;
+  offset?: number;
   nextCursor: string | null;
+};
+
+/** Worker row for Employees tab (Active or Left roster). */
+export type EmployeeListStatus = "active" | "inactive";
+
+export type AdminEmployeeItem = {
+  employeeId: string;
+  fullName: string;
+  plantId: string;
+  status: string;
+  enrolledAt: string | null;
+  enrollmentId: string | null;
+  revokedReason?: string | null;
+  leftAt?: string | null;
+};
+
+export type AdminEmployeeListResult = {
+  items: AdminEmployeeItem[];
+  total: number;
+  plantId: string;
+  status: EmployeeListStatus;
+  limit?: number;
+  offset?: number;
+};
+
+export type EmployeeRevokeResult = {
+  employeeId: string;
+  plantId: string;
+  enrollmentRevoked: boolean;
+  adminUngranted: boolean;
+  message: string;
 };
 
 export type AdminUserListResult = {
   items: AdminUserItem[];
   total: number;
   plantId: string;
+  limit?: number;
+  offset?: number;
 };
 
 export type AdminRevokeResult = {
@@ -452,29 +518,30 @@ export async function login(
 }
 
 /**
- * GET /admin/registrations/pending[?plantId=]
+ * GET /admin/registrations/pending[?plantId=&limit=&offset=]
  * Pass active plant workspace for SUPER; PLANT_ADMIN may omit (backend uses session).
+ * Default page size: 15.
  */
 export async function listPending(
   token: string,
   plantId?: string | null,
-): Promise<RegistrationQueueItem[]> {
+  options?: { limit?: number; offset?: number },
+): Promise<RegistrationQueueResult> {
   const params = new URLSearchParams();
   const trimmed = plantId?.trim();
   if (trimmed) {
     params.set("plantId", trimmed);
   }
-  const query = params.toString();
-  const path = query
-    ? `/admin/registrations/pending?${query}`
-    : "/admin/registrations/pending";
+  const limit = options?.limit ?? PENDING_PAGE_SIZE;
+  const offset = options?.offset ?? 0;
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
 
-  const body = await requestJson<{ items: RegistrationQueueItem[] }>(
-    path,
+  return requestJson<RegistrationQueueResult>(
+    `/admin/registrations/pending?${params.toString()}`,
     { method: "GET" },
     token,
   );
-  return body.items;
 }
 
 /** GET /plants — active plants for SUPER workspace selector (and kiosk Path A). */
@@ -489,14 +556,22 @@ export async function listPlants(): Promise<PlantListItem[]> {
 // Plant catalog (Layer B — PLANTS_MANAGE; soft-deactivate only)
 // ---------------------------------------------------------------------------
 
-/** GET /admin/plants — full catalog including inactive. */
-export async function listAdminPlants(token: string): Promise<AdminPlantItem[]> {
-  const body = await requestJson<{ plants: AdminPlantItem[] }>(
-    "/admin/plants",
+/** GET /admin/plants — full catalog including inactive (paginated). */
+export async function listAdminPlants(
+  token: string,
+  options?: { limit?: number; offset?: number },
+): Promise<AdminPlantListResult> {
+  const params = new URLSearchParams();
+  const limit = options?.limit ?? PLANT_PAGE_SIZE;
+  const offset = options?.offset ?? 0;
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+
+  return requestJson<AdminPlantListResult>(
+    `/admin/plants?${params.toString()}`,
     { method: "GET" },
     token,
   );
-  return body.plants;
 }
 
 /** POST /admin/plants — create active plant (unique plantCode). */
@@ -750,12 +825,10 @@ export async function listPlantAdmins(
   if (q) {
     params.set("q", q);
   }
-  if (options?.limit != null) {
-    params.set("limit", String(options.limit));
-  }
-  if (options?.offset != null) {
-    params.set("offset", String(options.offset));
-  }
+  const limit = options?.limit ?? ADMIN_PAGE_SIZE;
+  const offset = options?.offset ?? 0;
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
 
   return requestJson<AdminUserListResult>(
     `/admin/users?${params.toString()}`,
@@ -814,6 +887,7 @@ export async function listAuditLogs(
     category?: AuditCategory;
     q?: string;
     limit?: number;
+    offset?: number;
     cursor?: string | null;
     from?: string;
     to?: string;
@@ -839,8 +913,10 @@ export async function listAuditLogs(
   if (q) {
     params.set("q", q);
   }
-  if (options?.limit != null) {
-    params.set("limit", String(options.limit));
+  const limit = options?.limit ?? AUDIT_PAGE_SIZE;
+  params.set("limit", String(limit));
+  if (options?.offset != null) {
+    params.set("offset", String(options.offset));
   }
   if (options?.cursor) {
     params.set("cursor", options.cursor);
@@ -855,6 +931,98 @@ export async function listAuditLogs(
   return requestJson<AuditLogListResult>(
     `/admin/audit?${params.toString()}`,
     { method: "GET" },
+    token,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Employees — ACTIVE enrolled roster + soft revoke (EMPLOYEE_REVOKE)
+// ---------------------------------------------------------------------------
+
+/** GET /admin/employees?plantId=&status=active|inactive&q= */
+export async function listPlantEmployees(
+  token: string,
+  plantId: string,
+  options?: {
+    status?: EmployeeListStatus;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<AdminEmployeeListResult> {
+  const trimmedPlant = plantId.trim();
+  if (!trimmedPlant) {
+    throw new AdminApiClientError(
+      {
+        detail: "plantId is required.",
+        code: "PLANT_ACCESS_DENIED",
+      },
+      400,
+    );
+  }
+
+  const params = new URLSearchParams();
+  params.set("plantId", trimmedPlant);
+  params.set("status", options?.status ?? "active");
+  const q = options?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.offset != null) {
+    params.set("offset", String(options.offset));
+  }
+
+  return requestJson<AdminEmployeeListResult>(
+    `/admin/employees?${params.toString()}`,
+    { method: "GET" },
+    token,
+  );
+}
+
+/**
+ * POST /admin/employees/{employeeId}/revoke
+ * Soft: INACTIVE + enrollment REVOKED + auto-ungrant. Does not delete emp id.
+ */
+export async function revokePlantEmployee(
+  token: string,
+  employeeId: string,
+  plantId: string,
+  reason: string,
+): Promise<EmployeeRevokeResult> {
+  const normalizedId = employeeId.trim();
+  const trimmedPlant = plantId.trim();
+  const trimmedReason = reason.trim();
+  if (!normalizedId || !trimmedPlant) {
+    throw new AdminApiClientError(
+      {
+        detail: "employeeId and plantId are required.",
+        code: "INVALID_CREDENTIALS",
+      },
+      400,
+    );
+  }
+  if (!trimmedReason) {
+    throw new AdminApiClientError(
+      {
+        detail: "Revoke reason is required.",
+        code: "MISSING_DECISION_REASON",
+      },
+      400,
+    );
+  }
+
+  return requestJson<EmployeeRevokeResult>(
+    `/admin/employees/${encodeURIComponent(normalizedId)}/revoke`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        plantId: trimmedPlant,
+        reason: trimmedReason,
+      }),
+    },
     token,
   );
 }

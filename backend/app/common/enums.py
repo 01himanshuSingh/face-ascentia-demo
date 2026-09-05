@@ -59,6 +59,9 @@ class AdminPermissionCode(StrEnum):
     # Dedicated so audit UI can be revoked without removing registration review.
     # No images in this permission — face bytes stay on registration image routes.
     AUDIT_VIEW = "AUDIT_VIEW"
+    # Soft-revoke approved workers: INACTIVE + enrollment REVOKED (+ auto-ungrant).
+    # Plant-scoped; does not hard-delete employee_id.
+    EMPLOYEE_REVOKE = "EMPLOYEE_REVOKE"
 
 
 # v1 default permission sets copied to admin_role_permissions on grant / seed.
@@ -67,7 +70,7 @@ class AdminPermissionCode(StrEnum):
 #   SUPER_ADMIN  — full catalog (every AdminPermissionCode); all plants;
 #                  only global session (plant_id NULL) may create / deactivate plants
 #   PLANT_ADMIN  — own plant only; registration review + grant + PLANTS_MANAGE
-#                  + AUDIT_VIEW (read/update own plant; cannot create another workspace)
+#                  + AUDIT_VIEW + EMPLOYEE_REVOKE (own plant)
 #   SUB_ADMIN    — reserved; defaults kept for future phase; grant API rejects in v1
 #
 # Dynamic RBAC UI (future): same tables; edit admin_role_permissions per role/admin.
@@ -85,6 +88,7 @@ ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCod
             # Own plant catalog read/update only — create/deactivate blocked in plant_catalog.
             AdminPermissionCode.PLANTS_MANAGE,
             AdminPermissionCode.AUDIT_VIEW,
+            AdminPermissionCode.EMPLOYEE_REVOKE,
         }
     ),
     AdminRoleType.SUB_ADMIN: frozenset(
@@ -107,6 +111,7 @@ class AuditAction(StrEnum):
       admins        → ADMIN_GRANT, REVOKE
       kiosk         → ADMIN_KIOSK_ENROLL
       plants        → PLANT_CREATE, PLANT_UPDATE, PLANT_DEACTIVATE
+      employees     → EMPLOYEE_REVOKE
 
     Stored but not in default portal feed (advanced / forensics later):
       VIEW_IMAGE — noisy PII access trail
@@ -124,3 +129,5 @@ class AuditAction(StrEnum):
     PLANT_CREATE = "PLANT_CREATE"
     PLANT_UPDATE = "PLANT_UPDATE"
     PLANT_DEACTIVATE = "PLANT_DEACTIVATE"
+    # Soft-revoke enrolled worker (INACTIVE + enrollment REVOKED).
+    EMPLOYEE_REVOKE = "EMPLOYEE_REVOKE"

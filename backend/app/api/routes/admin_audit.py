@@ -64,15 +64,16 @@ def list_audit_logs(
         None,
         description="Case-insensitive contains on actor_id or target_id.",
     ),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(15, ge=1, le=100),
+    offset: int = Query(0, ge=0, description="Row offset for page navigation."),
     cursor: str | None = Query(
         None,
-        description="Opaque keyset from previous response nextCursor.",
+        description="Opaque keyset from previous response nextCursor (legacy).",
     ),
     from_time: datetime | None = Query(None, alias="from"),
     to_time: datetime | None = Query(None, alias="to"),
 ) -> AuditLogListResponse:
-    """Plant-workspace audit feed (keyset pagination, text/metadata only)."""
+    """Plant-workspace audit feed (offset pages; optional legacy cursor)."""
     return get_shared_audit_log_service().list_logs(
         db,
         session,
@@ -80,6 +81,7 @@ def list_audit_logs(
         category=category,
         q=q,
         limit=limit,
+        offset=offset,
         cursor=cursor,
         from_time=from_time,
         to_time=to_time,

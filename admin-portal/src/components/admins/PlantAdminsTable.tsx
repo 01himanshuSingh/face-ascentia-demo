@@ -5,23 +5,44 @@ export type PlantAdminsTableProps = {
   loading: boolean;
   busy: boolean;
   onRevoke: (admin: AdminUserItem) => void;
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
 };
+
+function SkeletonRows() {
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-white p-4">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-[3.25rem] rounded-xl skeleton-shimmer"
+          aria-hidden
+        />
+      ))}
+      <p className="sr-only">Loading plant admins…</p>
+    </div>
+  );
+}
 
 export function PlantAdminsTable({
   admins,
   loading,
   busy,
   onRevoke,
+  total = 0,
+  page = 1,
+  pageSize = 15,
+  totalPages = 1,
+  onPageChange,
 }: PlantAdminsTableProps) {
-  if (loading) {
-    return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm text-text-muted">
-        Loading plant admins…
-      </div>
-    );
+  if (loading && admins.length === 0) {
+    return <SkeletonRows />;
   }
 
-  if (admins.length === 0) {
+  if (!loading && total === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         No active plant admins for this workspace. Grant a worker from the
@@ -30,8 +51,15 @@ export function PlantAdminsTable({
     );
   }
 
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+    <div
+      className={`overflow-hidden rounded-xl border border-border bg-white shadow-sm transition ${
+        loading ? "opacity-70" : "opacity-100"
+      }`}
+    >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
@@ -69,7 +97,7 @@ export function PlantAdminsTable({
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || loading}
                     onClick={() => onRevoke(admin)}
                     className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
                   >
@@ -81,6 +109,35 @@ export function PlantAdminsTable({
           </tbody>
         </table>
       </div>
+
+      {onPageChange && total > pageSize ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+          <p className="text-xs text-text-muted">
+            Showing {rangeStart}–{rangeEnd} of {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => onPageChange(page - 1)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="min-w-[4.5rem] text-center text-xs font-medium text-text">
+              Page {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages || loading}
+              onClick={() => onPageChange(page + 1)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

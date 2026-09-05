@@ -62,6 +62,9 @@ class AdminPlantListResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
 
     plants: list[AdminPlantItem]
+    total: int = 0
+    limit: int = 15
+    offset: int = 0
 
 
 class PlantCreateRequest(BaseModel):

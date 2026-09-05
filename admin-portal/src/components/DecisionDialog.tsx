@@ -31,10 +31,10 @@ export function DecisionDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-text/50 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-text/40 p-4 backdrop-blur-md">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-[1.5rem] glass-panel p-6 shadow-2xl"
       >
         <h3 className="text-lg font-semibold text-text">
           {isApprove ? "Approve enrollment" : "Reject registration"}
@@ -48,7 +48,7 @@ export function DecisionDialog({
         <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-text">
           {isApprove ? "Note (optional)" : "Reason"}
           <textarea
-            className="min-h-24 resize-y rounded-lg border border-border px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+            className="min-h-24 resize-y rounded-xl border border-border/80 bg-white/70 px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
@@ -63,7 +63,7 @@ export function DecisionDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
+            className="rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
           >
             Cancel
           </button>
@@ -71,7 +71,7 @@ export function DecisionDialog({
             type="submit"
             disabled={busy}
             className={clsx(
-              "rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60",
+              "rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60",
               isApprove
                 ? "bg-primary hover:bg-brand-700"
                 : "bg-red-600 hover:bg-red-700",

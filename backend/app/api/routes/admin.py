@@ -178,7 +178,7 @@ def list_plant_admins(
             description="Optional search on employeeId or full name.",
         ),
     ] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    limit: Annotated[int, Query(ge=1, le=200)] = 15,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AdminUserListResponse:
     return get_shared_admin_users_service().list_plant_admins(
@@ -243,11 +243,21 @@ def list_pending_registrations(
             ),
         ),
     ] = None,
+    limit: Annotated[
+        int,
+        Query(ge=1, le=100, description="Page size (default 15)."),
+    ] = 15,
+    offset: Annotated[
+        int,
+        Query(ge=0, description="Row offset for pagination."),
+    ] = 0,
 ) -> RegistrationQueueResponse:
     return get_shared_admin_review_service().list_pending(
         db,
         session,
         plant_id=plant_id,
+        limit=limit,
+        offset=offset,
     )
 
 

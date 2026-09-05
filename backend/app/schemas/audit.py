@@ -5,7 +5,7 @@ Endpoint
   GET /admin/audit
     ?plantId=   required (SUPER workspace lens / PLANT_ADMIN own plant)
     &from= &to= optional ISO datetimes (service caps range, default last 7d)
-    &category=  all | approved | rejected | admins | kiosk | plants
+    &category=  all | approved | rejected | admins | kiosk | plants | employees
     &q=         optional actor_id / target_id search
     &limit=     page size (service caps)
     &cursor=    opaque keyset cursor from previous ``nextCursor``
@@ -16,6 +16,7 @@ Design locks
 ------------
 - One list response shape for all category chips (presets, not separate APIs).
 - Approved and rejected are **separate chips** (not one Registrations bucket).
+- Revoked employees chip (category ``employees``) = soft-revoke events (``EMPLOYEE_REVOKE``).
 - Text / metadata only — no image fields (faces stay on registration image routes).
 - Keyset pagination via ``nextCursor`` — not OFFSET / total count in v1.
 - ``VIEW_IMAGE`` / ``LOGIN`` are not in default ``all`` feed (service maps category).
@@ -40,6 +41,7 @@ class AuditCategory(StrEnum):
     ADMINS = "admins"
     KIOSK = "kiosk"
     PLANTS = "plants"
+    EMPLOYEES = "employees"
 
 
 class AuditLogItem(BaseModel):
@@ -60,16 +62,19 @@ class AuditLogItem(BaseModel):
 
 
 class AuditLogListResponse(BaseModel):
-    """Keyset page for one plant workspace."""
+    """Page for one plant workspace (offset pagination + optional keyset cursor)."""
 
     model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
 
     items: list[AuditLogItem]
     plant_id: UUID = Field(..., serialization_alias="plantId")
+    total: int = 0
+    limit: int = 15
+    offset: int = 0
     next_cursor: str | None = Field(
         None,
         serialization_alias="nextCursor",
-        description="Pass as cursor= on the next request; null when no more rows.",
+        description="Legacy keyset cursor; null when using offset pages.",
     )
 
 

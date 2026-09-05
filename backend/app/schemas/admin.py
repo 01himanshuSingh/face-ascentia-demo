@@ -20,6 +20,7 @@ class AdminErrorCode(StrEnum):
     PLANT_ACCESS_DENIED = "PLANT_ACCESS_DENIED"
     PERMISSION_DENIED = "PERMISSION_DENIED"
     EMPLOYEE_NOT_FOUND = "EMPLOYEE_NOT_FOUND"
+    EMPLOYEE_ALREADY_INACTIVE = "EMPLOYEE_ALREADY_INACTIVE"
     ADMIN_ALREADY_EXISTS = "ADMIN_ALREADY_EXISTS"
     ADMIN_NOT_FOUND = "ADMIN_NOT_FOUND"
     MISSING_DECISION_REASON = "MISSING_DECISION_REASON"
@@ -73,6 +74,9 @@ class RegistrationQueueResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
 
     items: list[RegistrationQueueItem]
+    total: int = 0
+    limit: int = 15
+    offset: int = 0
 
 
 class AdminGrantRequest(BaseModel):
@@ -142,6 +146,8 @@ class AdminUserListResponse(BaseModel):
     items: list[AdminUserItem]
     total: int
     plant_id: UUID = Field(..., serialization_alias="plantId")
+    limit: int = 15
+    offset: int = 0
 
 
 class AdminRevokeRequest(BaseModel):

@@ -70,19 +70,18 @@ export function GrantAdminForm({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white p-6 shadow-sm shadow-text/5">
-      <div className="max-w-lg">
+    <div className="max-w-lg">
+      <div>
         <h2 className="text-lg font-semibold text-text">Grant plant admin</h2>
-        <p className="mt-2 text-sm leading-relaxed text-text-muted">
-          Assign <strong className="font-medium text-text">PLANT_ADMIN</strong>{" "}
-          to an employee who is already enrolled as a worker. Plant workspace
-          is taken from the employee record — it cannot be changed at grant time.
+        <p className="mt-1.5 text-sm leading-relaxed text-text-muted">
+          Give portal access to an enrolled worker. Their plant comes from the
+          employee record and cannot be changed here.
         </p>
       </div>
 
       {statusMessage ? (
         <p
-          className="mt-4 rounded-lg border border-primary/30 bg-brand-50 px-4 py-3 text-sm text-brand-800"
+          className="mt-4 rounded-xl border border-primary/30 bg-brand-50 px-4 py-3 text-sm text-brand-800"
           role="status"
         >
           {statusMessage}
@@ -91,18 +90,18 @@ export function GrantAdminForm({
 
       {errorMessage ? (
         <p
-          className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
           role="alert"
         >
           {errorMessage}
         </p>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="mt-6 flex max-w-lg flex-col gap-4">
+      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
           Employee ID
           <input
-            className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+            className="h-11 rounded-xl border border-border/80 bg-white px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
             value={employeeId}
             onChange={(event) => handleEmployeeChange(event.target.value)}
             onBlur={handleEmployeeBlur}
@@ -112,23 +111,28 @@ export function GrantAdminForm({
             required
           />
           <span className="text-xs font-normal text-text-muted">
-            Tab out after entering ID to verify the worker and resolve their
-            plant.
+            Leave the field to look up the worker and their plant.
           </span>
         </label>
 
         {previewLoading ? (
-          <p className="text-sm text-text-muted">Looking up employee…</p>
+          <p className="flex items-center gap-2 text-sm text-text-muted" aria-live="polite">
+            <span
+              className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"
+              aria-hidden
+            />
+            Looking up employee…
+          </p>
         ) : null}
 
         {previewError ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {previewError}
           </p>
         ) : null}
 
         {previewMatches && !previewError ? (
-          <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm">
+          <div className="rounded-xl border border-border/80 bg-background/80 px-4 py-3 text-sm">
             <p className="font-medium text-text">{preview.fullName}</p>
             <p className="mt-1 text-text-muted">
               Plant: {preview.plantName} ({preview.plantCode})
@@ -139,8 +143,7 @@ export function GrantAdminForm({
                 {preview.existingAdminRole
                   ? ` (${preview.existingAdminRole.replace("_", " ")})`
                   : ""}
-                . Grant is not allowed — use a different employee or revoke admin
-                access first.
+                . Choose another worker or revoke existing admin access first.
               </p>
             ) : null}
           </div>
@@ -149,7 +152,7 @@ export function GrantAdminForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
           Portal password
           <input
-            className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+            className="h-11 rounded-xl border border-border/80 bg-white px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -162,7 +165,7 @@ export function GrantAdminForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
           Confirm password
           <input
-            className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+            className="h-11 rounded-xl border border-border/80 bg-white px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
             type="password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
@@ -180,9 +183,20 @@ export function GrantAdminForm({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#006b31] disabled:cursor-not-allowed disabled:opacity-60"
+          aria-busy={busy}
+          className="mt-1 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy ? "Granting…" : "Grant PLANT_ADMIN"}
+          {busy ? (
+            <>
+              <span
+                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                aria-hidden
+              />
+              Granting…
+            </>
+          ) : (
+            "Grant PLANT_ADMIN"
+          )}
         </button>
       </form>
     </div>

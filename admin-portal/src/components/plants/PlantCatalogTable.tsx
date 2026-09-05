@@ -12,6 +12,11 @@ export type PlantCatalogTableProps = {
   allowDeactivate: boolean;
   onEdit: (plant: AdminPlantItem) => void;
   onToggleActive: (plant: AdminPlantItem) => void;
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
 };
 
 export function PlantCatalogTable({
@@ -21,8 +26,13 @@ export function PlantCatalogTable({
   allowDeactivate,
   onEdit,
   onToggleActive,
+  total = 0,
+  page = 1,
+  pageSize = 15,
+  totalPages = 1,
+  onPageChange,
 }: PlantCatalogTableProps) {
-  if (loading) {
+  if (loading && plants.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm text-text-muted">
         Loading plant catalog…
@@ -30,7 +40,7 @@ export function PlantCatalogTable({
     );
   }
 
-  if (plants.length === 0) {
+  if (!loading && total === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         No plants yet. Create the first plant to open a workspace for
@@ -38,6 +48,9 @@ export function PlantCatalogTable({
       </div>
     );
   }
+
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
@@ -109,6 +122,35 @@ export function PlantCatalogTable({
           </tbody>
         </table>
       </div>
+
+      {onPageChange && total > pageSize ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+          <p className="text-xs text-text-muted">
+            Showing {rangeStart}–{rangeEnd} of {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => onPageChange(page - 1)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="min-w-[4.5rem] text-center text-xs font-medium text-text">
+              Page {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages || loading}
+              onClick={() => onPageChange(page + 1)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -17,55 +17,71 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_#e6f4ec_0%,_transparent_55%),linear-gradient(180deg,#f7f8f6_0%,#d9ded9_100%)]"
-      />
-      <div className="relative w-full max-w-md rounded-2xl border border-border bg-white/95 p-8 shadow-xl shadow-text/5 backdrop-blur">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-          Face Auth
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-text">
-          Admin Portal
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-text-muted">
-          Sign in to review pending employee registrations for your plant.
-        </p>
+    <div className="flex min-h-screen items-center justify-center bg-white px-5 py-12 sm:px-6">
+      <div className="w-full max-w-[22rem]">
+        <header className="mb-10 text-center">
+          <h1 className="text-[1.75rem] font-semibold tracking-tight text-text sm:text-[2rem]">
+            Shift Face
+          </h1>
+          <p className="mt-2 text-sm font-medium text-text-muted">Admin Portal</p>
+        </header>
 
         {notice ? (
-          <p className="mt-4 rounded-lg border border-secondary/40 bg-[#fff8e6] px-3 py-2 text-sm text-[#7a5c00]">
+          <p
+            role="status"
+            className="mb-6 rounded-lg border border-secondary/40 bg-[#fff8e6] px-3 py-2.5 text-center text-sm text-[#7a5c00]"
+          >
             {notice}
           </p>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <label
+            htmlFor="admin-employee-id"
+            className="flex flex-col gap-1.5 text-sm font-medium text-text"
+          >
             Employee ID
             <input
-              className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+              id="admin-employee-id"
+              name="employeeId"
+              className="h-11 w-full rounded-lg border border-border bg-background px-3.5 text-base text-text outline-none transition placeholder:text-text-muted/70 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
               value={employeeId}
               onChange={(event) => setEmployeeId(event.target.value)}
+              placeholder="Enter Employee ID"
               autoComplete="username"
+              spellCheck={false}
               disabled={busy}
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
+
+          <label
+            htmlFor="admin-password"
+            className="flex flex-col gap-1.5 text-sm font-medium text-text"
+          >
             Password
             <input
-              className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+              id="admin-password"
+              name="password"
+              className="h-11 w-full rounded-lg border border-border bg-background px-3.5 text-base text-text outline-none transition placeholder:text-text-muted/70 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter password"
               autoComplete="current-password"
               disabled={busy}
             />
           </label>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+          {error ? (
+            <p role="alert" className="text-center text-sm text-red-600">
+              {error}
+            </p>
+          ) : null}
+
           <button
             type="submit"
             disabled={busy}
-            className="mt-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 flex h-11 w-full items-center justify-center rounded-lg bg-primary text-sm font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>

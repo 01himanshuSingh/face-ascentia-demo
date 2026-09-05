@@ -45,10 +45,23 @@ def list_active(db: Session) -> list[Plant]:
     return list(db.scalars(stmt).all())
 
 
-def list_all(db: Session) -> list[Plant]:
+def list_all(
+    db: Session,
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Plant]:
     """Full catalog including inactive — admin Plants tab (PLANTS_MANAGE)."""
     stmt = select(Plant).order_by(Plant.is_active.desc(), Plant.plant_name)
+    if limit is not None:
+        safe_limit = max(1, min(limit, 200))
+        stmt = stmt.offset(max(0, offset)).limit(safe_limit)
     return list(db.scalars(stmt).all())
+
+
+def count_all(db: Session) -> int:
+    """Total plants (active + inactive) for catalog pagination."""
+    return int(db.scalar(select(func.count()).select_from(Plant)) or 0)
 
 
 def create(
@@ -113,6 +126,7 @@ def count_dependent_rows(db: Session, plant_id: uuid.UUID) -> dict[str, int]:
 
 
 __all__ = [
+    "count_all",
     "count_dependent_rows",
     "create",
     "get_by_code",

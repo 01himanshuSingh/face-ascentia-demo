@@ -6,7 +6,7 @@
   /* Brand tokens */
   --color-primary: #00843d;
   --color-secondary: #f5a400;
-  --color-background: #f7f8f6;
+  --color-background: #f4f6f4;
   --color-text: #1f2937;
   --color-border: #d9ded9;
   --color-text-muted: #6b7280;
@@ -31,4 +31,60 @@
   body {
     @apply m-0 bg-background font-sans text-text antialiased;
   }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 1px 2px rgba(31, 41, 55, 0.04),
+      0 18px 40px rgba(31, 41, 55, 0.06);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .glass-panel-soft {
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 10px 28px rgba(31, 41, 55, 0.05);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .dashboard-ambient {
+    background-color: #f4f6f4;
+    background-image:
+      radial-gradient(
+        ellipse 70% 50% at 8% 0%,
+        rgba(0, 132, 61, 0.07),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 55% 45% at 100% 100%,
+        rgba(245, 164, 0, 0.06),
+        transparent 50%
+      );
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(217, 222, 217, 0.35) 0%,
+      rgba(255, 255, 255, 0.75) 50%,
+      rgba(217, 222, 217, 0.35) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
 }

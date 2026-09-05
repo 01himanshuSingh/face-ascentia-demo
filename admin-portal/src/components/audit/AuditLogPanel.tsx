@@ -8,8 +8,10 @@ import { AuditLogTable } from "./AuditLogTable";
 export type AuditLogPanelProps = {
   items: AuditLogItem[];
   loading: boolean;
-  loadingMore: boolean;
-  hasMore: boolean;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
   category: AuditCategory;
   searchInput: string;
   needsPlant: boolean;
@@ -18,14 +20,16 @@ export type AuditLogPanelProps = {
   allowFace: boolean;
   onCategoryChange: (category: AuditCategory) => void;
   onSearchChange: (value: string) => void;
-  onLoadMore: () => void;
+  onPageChange: (page: number) => void;
 };
 
 export function AuditLogPanel({
   items,
   loading,
-  loadingMore,
-  hasMore,
+  total,
+  page,
+  pageSize,
+  totalPages,
   category,
   searchInput,
   needsPlant,
@@ -34,7 +38,7 @@ export function AuditLogPanel({
   allowFace,
   onCategoryChange,
   onSearchChange,
-  onLoadMore,
+  onPageChange,
 }: AuditLogPanelProps) {
   const [selected, setSelected] = useState<AuditLogItem | null>(null);
 
@@ -52,24 +56,14 @@ export function AuditLogPanel({
       <div className="max-w-2xl">
         <h2 className="text-lg font-semibold text-text">Audit log</h2>
         <p className="mt-1 text-sm leading-relaxed text-text-muted">
-          Plant-scoped compliance events
+          Recent plant activity
           {workspaceLabel ? (
             <>
               {" "}
               for <span className="font-medium text-text">{workspaceLabel}</span>
             </>
           ) : null}
-          . Text timeline only — open a row for details
-          {allowFace
-            ? "; Portal approved / Kiosk approved can show the face photo"
-            : ""}
-          .
-        </p>
-        <p className="mt-2 text-xs leading-relaxed text-text-muted">
-          <span className="font-medium text-text">Portal approved</span> = desk
-          review of a pending registration.{" "}
-          <span className="font-medium text-text">Kiosk approved</span> = plant
-          admin enrolled the worker directly at the kiosk (no pending queue).
+          . Open a row for details.
         </p>
       </div>
 
@@ -83,21 +77,13 @@ export function AuditLogPanel({
       <AuditLogTable
         items={items}
         loading={loading}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        totalPages={totalPages}
         onSelect={setSelected}
+        onPageChange={onPageChange}
       />
-
-      {hasMore ? (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => onLoadMore()}
-            disabled={loadingMore}
-            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
-          >
-            {loadingMore ? "Loading…" : "Load more"}
-          </button>
-        </div>
-      ) : null}
 
       {selected ? (
         <AuditEventDialog

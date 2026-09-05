@@ -20,10 +20,10 @@ export function PlantWorkspaceSelector({
   onChange,
 }: PlantWorkspaceSelectorProps) {
   return (
-    <label className="flex min-w-[12rem] flex-col gap-1 text-xs font-medium text-text-muted">
+    <label className="flex min-w-[11rem] flex-col gap-1 text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-text-muted">
       Plant workspace
       <select
-        className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+        className="h-10 rounded-xl border border-border/80 bg-white/80 px-3 text-sm font-medium text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
         value={selectedPlantId ?? ""}
         disabled={disabled || loading || plants.length === 0}
         onChange={(event) => onChange(event.target.value)}

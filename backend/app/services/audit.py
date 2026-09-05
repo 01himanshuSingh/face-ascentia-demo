@@ -17,6 +17,7 @@ Category → actions (default feed — not every click)
   admins        → ADMIN_GRANT, REVOKE
   kiosk         → ADMIN_KIOSK_ENROLL
   plants        → PLANT_CREATE, PLANT_UPDATE, PLANT_DEACTIVATE
+  employees     → EMPLOYEE_REVOKE  (UI: “Revoked employees”)
   all           → union of the above
 
 VIEW_IMAGE / LOGIN stay in DB but are excluded from default ``all``.
@@ -65,6 +66,7 @@ _CATEGORY_ACTIONS: dict[AuditCategory, frozenset[str]] = {
             AuditAction.PLANT_DEACTIVATE.value,
         }
     ),
+    AuditCategory.EMPLOYEES: frozenset({AuditAction.EMPLOYEE_REVOKE.value}),
 }
 
 _DEFAULT_FEED_ACTIONS: frozenset[str] = frozenset().union(*_CATEGORY_ACTIONS.values())
@@ -136,7 +138,8 @@ class AuditLogService:
         plant_id: uuid.UUID,
         category: AuditCategory = AuditCategory.ALL,
         q: str | None = None,
-        limit: int = 50,
+        limit: int = 15,
+        offset: int = 0,
         cursor: str | None = None,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
@@ -147,12 +150,54 @@ class AuditLogService:
         start, end = _resolve_time_window(from_time, to_time)
         actions = _actions_for_category(category)
         safe_limit = max(1, min(limit, 100))
+        safe_offset = max(0, offset)
 
-        cursor_created_at: datetime | None = None
-        cursor_log_id: uuid.UUID | None = None
-        if cursor:
-            cursor_created_at, cursor_log_id = _decode_cursor(cursor)
+        # Portal uses offset pages. Cursor kept for older clients.
+        use_offset = cursor is None
 
+        if use_offset:
+            rows = audit_repository.list_for_plant(
+                db,
+                plant_id,
+                actions=actions,
+                q=q,
+                from_time=start,
+                to_time=end,
+                limit=safe_limit,
+                offset=safe_offset,
+            )
+            total = audit_repository.count_for_plant(
+                db,
+                plant_id,
+                actions=actions,
+                q=q,
+                from_time=start,
+                to_time=end,
+            )
+            items = [
+                AuditLogItem(
+                    log_id=row.log_id,
+                    created_at=row.created_at,
+                    actor_id=row.actor_id,
+                    actor_role=row.actor_role,
+                    action=row.action,
+                    target_type=row.target_type,
+                    target_id=row.target_id,
+                    plant_id=row.plant_id,
+                    metadata=row.metadata_json,
+                )
+                for row in rows
+            ]
+            return AuditLogListResponse(
+                items=items,
+                plant_id=plant_id,
+                total=total,
+                limit=safe_limit,
+                offset=safe_offset,
+                next_cursor=None,
+            )
+
+        cursor_created_at, cursor_log_id = _decode_cursor(cursor)
         rows = audit_repository.list_for_plant(
             db,
             plant_id,
@@ -190,6 +235,9 @@ class AuditLogService:
         return AuditLogListResponse(
             items=items,
             plant_id=plant_id,
+            total=0,
+            limit=safe_limit,
+            offset=0,
             next_cursor=next_cursor,
         )
 

@@ -12,7 +12,11 @@ export type PlantAdminsPanelProps = {
   searchInput: string;
   needsPlant: boolean;
   workspaceLabel: string | null;
+  page: number;
+  pageSize: number;
+  totalPages: number;
   onSearchChange: (value: string) => void;
+  onPageChange: (page: number) => void;
   onRevoke: (employeeId: string, reason?: string) => Promise<void>;
 };
 
@@ -24,7 +28,11 @@ export function PlantAdminsPanel({
   searchInput,
   needsPlant,
   workspaceLabel,
+  page,
+  pageSize,
+  totalPages,
   onSearchChange,
+  onPageChange,
   onRevoke,
 }: PlantAdminsPanelProps) {
   const [revokeTarget, setRevokeTarget] = useState<AdminUserItem | null>(null);
@@ -55,7 +63,7 @@ export function PlantAdminsPanel({
           </p>
         </div>
         <span className="rounded-full bg-border/80 px-2.5 py-0.5 text-xs font-semibold text-text">
-          {total}
+          {loading && total === 0 ? "…" : total}
         </span>
       </div>
 
@@ -74,6 +82,11 @@ export function PlantAdminsPanel({
         admins={admins}
         loading={loading}
         busy={busy}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
         onRevoke={setRevokeTarget}
       />
 

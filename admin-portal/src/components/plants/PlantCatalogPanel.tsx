@@ -18,6 +18,11 @@ export type PlantCatalogPanelProps = {
   allowCreate: boolean;
   /** Global catalog admin only — plant-scoped admins cannot deactivate. */
   allowDeactivate: boolean;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
   onCreate: (payload: PlantCreatePayload) => Promise<void>;
   onUpdate: (plantId: string, payload: PlantUpdatePayload) => Promise<void>;
   onSetActive: (plantId: string, isActive: boolean) => Promise<void>;
@@ -36,6 +41,11 @@ export function PlantCatalogPanel({
   statusMessage,
   allowCreate,
   allowDeactivate,
+  total,
+  page,
+  pageSize,
+  totalPages,
+  onPageChange,
   onCreate,
   onUpdate,
   onSetActive,
@@ -94,6 +104,11 @@ export function PlantCatalogPanel({
         loading={loading}
         busy={busy}
         allowDeactivate={allowDeactivate}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        totalPages={totalPages}
+        onPageChange={allowCreate ? onPageChange : undefined}
         onEdit={(plant) => setDialog({ open: true, mode: "edit", plant })}
         onToggleActive={(plant) => {
           void onSetActive(plant.plantId, !plant.isActive);

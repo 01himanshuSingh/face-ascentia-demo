@@ -1,41 +1,43 @@
 /**
- * Plant admin roster + ungrant (SUPER workspace).
+ * Plant workers roster — Active (enrolled) or Left (INACTIVE history).
  *
- * Uses workspacePlantId from the client lens — never rewrites admin_roles.
- * Authz: canRevokePlantAdmins (global + ADMIN_GRANT_PLANT_ADMIN); backend enforces.
- * Offset pagination: 15 / page (same as Employees / Audit / Plants).
+ * Workspace plantId from client lens. Soft revoke keeps employee_id;
+ * switch to Left to see former workers. Paginated (15 / page).
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  ADMIN_PAGE_SIZE,
-  listPlantAdmins,
-  revokePlantAdmin,
+  EMPLOYEE_PAGE_SIZE,
+  listPlantEmployees,
+  revokePlantEmployee,
+  type AdminEmployeeItem,
   type AdminSession,
-  type AdminUserItem,
+  type EmployeeListStatus,
 } from "../api/adminApi";
 import { useToast } from "../components/toast/ToastProvider";
 import { formatAdminError } from "../lib/formatAdminError";
 import { adminQueryKeys } from "../lib/queryKeys";
 
-type UsePlantAdminsOptions = {
+type UsePlantEmployeesOptions = {
   session: AdminSession | null;
   workspacePlantId: string | null;
   enabled: boolean;
   onAuthFailure: (error: unknown) => boolean;
 };
 
-export function usePlantAdmins({
+export function usePlantEmployees({
   session,
   workspacePlantId,
   enabled,
   onAuthFailure,
-}: UsePlantAdminsOptions) {
+}: UsePlantEmployeesOptions) {
   const token = session?.adminSessionToken ?? null;
   const queryClient = useQueryClient();
   const toast = useToast();
+  const [rosterStatus, setRosterStatusState] =
+    useState<EmployeeListStatus>("active");
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -50,23 +52,29 @@ export function usePlantAdmins({
 
   useEffect(() => {
     setPage(1);
-  }, [workspacePlantId, debouncedQ]);
+  }, [workspacePlantId, rosterStatus, debouncedQ]);
+
+  const setRosterStatus = useCallback((status: EmployeeListStatus) => {
+    setRosterStatusState(status);
+  }, []);
 
   const listEnabled =
     enabled && Boolean(token) && Boolean(workspacePlantId);
 
   const listQuery = useQuery({
-    queryKey: adminQueryKeys.plantAdmins(
+    queryKey: adminQueryKeys.employees(
       token ?? "",
       workspacePlantId ?? "",
+      rosterStatus,
       debouncedQ,
       page,
     ),
     queryFn: () =>
-      listPlantAdmins(token!, workspacePlantId!, {
+      listPlantEmployees(token!, workspacePlantId!, {
+        status: rosterStatus,
         q: debouncedQ || undefined,
-        limit: ADMIN_PAGE_SIZE,
-        offset: (page - 1) * ADMIN_PAGE_SIZE,
+        limit: EMPLOYEE_PAGE_SIZE,
+        offset: (page - 1) * EMPLOYEE_PAGE_SIZE,
       }),
     enabled: listEnabled,
     meta: { onAuthFailure },
@@ -81,7 +89,7 @@ export function usePlantAdmins({
     }
     const formatted = formatAdminError(
       listQuery.error,
-      "Could not load plant admins.",
+      "Could not load employees.",
     );
     toast.error(formatted.title, formatted.description);
     setToastedListAt(listQuery.errorUpdatedAt);
@@ -93,9 +101,9 @@ export function usePlantAdmins({
     toastedListAt,
   ]);
 
-  const admins: AdminUserItem[] = listQuery.data?.items ?? [];
+  const employees: AdminEmployeeItem[] = listQuery.data?.items ?? [];
   const total = listQuery.data?.total ?? 0;
-  const pageSize = listQuery.data?.limit ?? ADMIN_PAGE_SIZE;
+  const pageSize = listQuery.data?.limit ?? EMPLOYEE_PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
 
   useEffect(() => {
@@ -117,31 +125,29 @@ export function usePlantAdmins({
       reason,
     }: {
       employeeId: string;
-      reason?: string;
-    }) => revokePlantAdmin(token!, employeeId, workspacePlantId!, reason),
+      reason: string;
+    }) => revokePlantEmployee(token!, employeeId, workspacePlantId!, reason),
     onSuccess: async (result) => {
-      toast.success("Admin revoked", result.message);
+      toast.success("Employee revoked", result.message);
       if (token && workspacePlantId) {
         await queryClient.invalidateQueries({
-          queryKey: [
-            ...adminQueryKeys.all,
-            "plant-admins",
-            token,
-            workspacePlantId,
-          ],
+          queryKey: [...adminQueryKeys.all, "employees", token, workspacePlantId],
         });
       }
     },
     onError: (error) => {
       if (!onAuthFailure(error)) {
-        const formatted = formatAdminError(error, "Failed to revoke admin.");
+        const formatted = formatAdminError(
+          error,
+          "Failed to revoke employee.",
+        );
         toast.error(formatted.title, formatted.description);
       }
     },
   });
 
   const revoke = useCallback(
-    async (employeeId: string, reason?: string) => {
+    async (employeeId: string, reason: string) => {
       if (!token || !workspacePlantId) {
         return;
       }
@@ -163,17 +169,12 @@ export function usePlantAdmins({
       return;
     }
     await queryClient.invalidateQueries({
-      queryKey: [
-        ...adminQueryKeys.all,
-        "plant-admins",
-        token,
-        workspacePlantId,
-      ],
+      queryKey: [...adminQueryKeys.all, "employees", token, workspacePlantId],
     });
   }, [queryClient, token, workspacePlantId]);
 
   return {
-    admins,
+    employees,
     total,
     page,
     pageSize,
@@ -181,6 +182,8 @@ export function usePlantAdmins({
     goToPage,
     loading: listQuery.isLoading || listQuery.isFetching,
     busy: revokeMutation.isPending,
+    rosterStatus,
+    setRosterStatus,
     searchInput,
     setSearchInput,
     needsPlant: !workspacePlantId,

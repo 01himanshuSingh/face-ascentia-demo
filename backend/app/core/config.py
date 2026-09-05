@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # --- process / HTTP ---
     database_url: str = (
-        "postgresql+psycopg://face_auth:change_me_local_only@localhost:5433/face_auth"
+        "postgresql+psycopg://face_auth:change_me_local_only@localhost:5432/face_auth"
     )
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     # OpenCV SFace common starting point (~0.363). Tune per plant after score logs.
     face_match_cosine_threshold: float = Field(
         default=0.463,
+        ge=-1.0,
+        le=1.0,
+    )
+
+    # 1:N duplicate gate at register / approve / kiosk enroll (higher = stricter).
+    # Separate from 1:1 auth so false plant duplicates can be tuned independently.
+    face_duplicate_cosine_threshold: float = Field(
+        default=0.58,
         ge=-1.0,
         le=1.0,
     )

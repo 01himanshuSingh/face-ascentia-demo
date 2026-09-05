@@ -65,8 +65,8 @@ class DuplicateCheckService:
     """
     Plant-scoped 1:N duplicate detection against ACTIVE enrollment templates.
 
-    Uses pgvector cosine distance (<=>) backed by HNSW — same metric family
-    as 1:1 auth (face_match_cosine_threshold).
+    Uses pgvector cosine distance (<=>) backed by HNSW — separate gate from
+    1:1 auth (``face_duplicate_cosine_threshold``, default 0.53).
     """
 
     def __init__(self, app_settings: Settings | None = None) -> None:
@@ -89,12 +89,12 @@ class DuplicateCheckService:
             plant_id: Workspace from employees.plant_id (plant-scoped search).
             employee_id: Employee being registered — excluded from neighbors.
             live_embedding: SFace vector from face_verification.extract_live_embedding.
-            threshold: Cosine gate; defaults to settings.face_match_cosine_threshold.
+            threshold: Cosine gate; defaults to settings.face_duplicate_cosine_threshold.
         """
         gate = (
             threshold
             if threshold is not None
-            else self._settings.face_match_cosine_threshold
+            else self._settings.face_duplicate_cosine_threshold
         )
         nearest = self.find_nearest_active_in_plant(
             db,
@@ -150,7 +150,7 @@ class DuplicateCheckService:
         gate = (
             threshold
             if threshold is not None
-            else self._settings.face_match_cosine_threshold
+            else self._settings.face_duplicate_cosine_threshold
         )
         query_vector = _coerce_embedding_vector(
             live_embedding,

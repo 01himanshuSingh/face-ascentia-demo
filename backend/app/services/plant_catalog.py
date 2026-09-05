@@ -134,18 +134,36 @@ class PlantCatalogService:
         self,
         db: Session,
         session: AdminSession,
+        *,
+        limit: int = 15,
+        offset: int = 0,
     ) -> AdminPlantListResponse:
         """Catalog view — all plants for global admin; own plant only otherwise."""
         assert_permission(session, AdminPermissionCode.PLANTS_MANAGE)
+        safe_limit = max(1, min(limit, 200))
+        safe_offset = max(0, offset)
 
         if _is_global_catalog_admin(session):
-            plants = plant_repository.list_all(db)
+            plants = plant_repository.list_all(
+                db,
+                limit=safe_limit,
+                offset=safe_offset,
+            )
+            total = plant_repository.count_all(db)
         else:
             assert session.plant_id is not None
             own = plant_repository.get_by_id(db, session.plant_id)
             plants = [own] if own is not None else []
+            total = len(plants)
+            safe_limit = max(total, 1)
+            safe_offset = 0
 
-        return AdminPlantListResponse(plants=[_to_admin_item(p) for p in plants])
+        return AdminPlantListResponse(
+            plants=[_to_admin_item(p) for p in plants],
+            total=total,
+            limit=safe_limit,
+            offset=safe_offset,
+        )
 
     def create_plant(
         self,

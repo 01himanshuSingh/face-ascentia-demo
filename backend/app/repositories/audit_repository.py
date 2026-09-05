@@ -1,4 +1,4 @@
-"""Audit log data access — append-only writes + plant-scoped keyset reads.
+"""Audit log data access — append-only writes + plant-scoped list reads.
 
 System boundary
 ---------------
@@ -18,18 +18,8 @@ after domain flush. ``plant_id`` required. ``action`` = ``AuditAction`` value.
 
 Read contract
 -------------
-``list_for_plant`` — newest-first page for one workspace:
-
-  WHERE plant_id = ?
-    AND created_at >= from_time AND created_at < to_time
-    AND action IN (...)
-    AND (optional actor_id / target_id ILIKE)
-    AND (created_at, log_id) < cursor   -- keyset, not OFFSET
-  ORDER BY created_at DESC, log_id DESC
-  LIMIT n
-
-Uses ``idx_audit_plant_time (plant_id, created_at)``. Caller requests
-``limit + 1`` when it needs a ``nextCursor`` signal.
+``list_for_plant`` — newest-first page for one workspace (keyset and/or offset).
+``count_for_plant`` — total matching rows in the same filter window.
 """
 
 from __future__ import annotations
@@ -38,7 +28,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.database.models.audit_log import AuditLog
@@ -71,6 +61,32 @@ def create_entry(
     return row
 
 
+def _base_filters(
+    plant_id: uuid.UUID,
+    *,
+    actions: frozenset[str],
+    from_time: datetime,
+    to_time: datetime,
+    q: str | None,
+):
+    filters = [
+        AuditLog.plant_id == plant_id,
+        AuditLog.created_at >= from_time,
+        AuditLog.created_at < to_time,
+        AuditLog.action.in_(actions),
+    ]
+    normalized_q = (q or "").strip()
+    if normalized_q:
+        pattern = f"%{normalized_q}%"
+        filters.append(
+            or_(
+                AuditLog.actor_id.ilike(pattern),
+                AuditLog.target_id.ilike(pattern),
+            )
+        )
+    return filters
+
+
 def list_for_plant(
     db: Session,
     plant_id: uuid.UUID,
@@ -80,45 +96,62 @@ def list_for_plant(
     to_time: datetime,
     q: str | None = None,
     limit: int = 50,
+    offset: int | None = None,
     cursor_created_at: datetime | None = None,
     cursor_log_id: uuid.UUID | None = None,
 ) -> list[AuditLog]:
-    """Newest-first keyset page for one plant (no images, no total count)."""
+    """Newest-first page for one plant (no images)."""
     if not actions:
         return []
 
     safe_limit = max(1, min(limit, 101))
+    filters = _base_filters(
+        plant_id,
+        actions=actions,
+        from_time=from_time,
+        to_time=to_time,
+        q=q,
+    )
 
     stmt = (
         select(AuditLog)
-        .where(
-            AuditLog.plant_id == plant_id,
-            AuditLog.created_at >= from_time,
-            AuditLog.created_at < to_time,
-            AuditLog.action.in_(actions),
-        )
+        .where(*filters)
         .order_by(AuditLog.created_at.desc(), AuditLog.log_id.desc())
         .limit(safe_limit)
     )
 
-    if cursor_created_at is not None and cursor_log_id is not None:
-        # Strictly older than the last row the client already has.
+    if offset is not None:
+        stmt = stmt.offset(max(0, offset))
+    elif cursor_created_at is not None and cursor_log_id is not None:
         stmt = stmt.where(
             tuple_(AuditLog.created_at, AuditLog.log_id)
             < (cursor_created_at, cursor_log_id)
         )
 
-    normalized_q = (q or "").strip()
-    if normalized_q:
-        pattern = f"%{normalized_q}%"
-        stmt = stmt.where(
-            or_(
-                AuditLog.actor_id.ilike(pattern),
-                AuditLog.target_id.ilike(pattern),
-            )
-        )
-
     return list(db.scalars(stmt).all())
 
 
-__all__ = ["create_entry", "list_for_plant"]
+def count_for_plant(
+    db: Session,
+    plant_id: uuid.UUID,
+    *,
+    actions: frozenset[str],
+    from_time: datetime,
+    to_time: datetime,
+    q: str | None = None,
+) -> int:
+    """Count matching audit rows for offset pagination totals."""
+    if not actions:
+        return 0
+    filters = _base_filters(
+        plant_id,
+        actions=actions,
+        from_time=from_time,
+        to_time=to_time,
+        q=q,
+    )
+    stmt = select(func.count()).select_from(AuditLog).where(*filters)
+    return int(db.scalar(stmt) or 0)
+
+
+__all__ = ["count_for_plant", "create_entry", "list_for_plant"]

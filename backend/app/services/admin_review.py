@@ -103,6 +103,8 @@ class AdminReviewService:
         session: AdminSession,
         *,
         plant_id: uuid.UUID | None = None,
+        limit: int = 15,
+        offset: int = 0,
     ) -> RegistrationQueueResponse:
         """List PENDING registrations for the active plant workspace.
 
@@ -111,13 +113,22 @@ class AdminReviewService:
         plant_id:
             Active plant workspace from Admin Portal (SUPER selector).
             PLANT_ADMIN may omit; forced to ``session.plant_id``.
+        limit / offset:
+            Page size (default 15) and offset for queue pagination.
         """
         assert_permission(session, AdminPermissionCode.REGISTRATION_VIEW_PENDING)
 
         workspace_plant_id = _resolve_pending_workspace_plant_id(session, plant_id)
+        safe_limit = max(1, min(limit, 100))
+        safe_offset = max(0, offset)
 
         if workspace_plant_id is None:
-            rows = registration_repository.list_pending_all(db)
+            rows = registration_repository.list_pending_all(
+                db,
+                limit=safe_limit,
+                offset=safe_offset,
+            )
+            total = registration_repository.count_pending_all(db)
         else:
             plant = plant_repository.get_by_id(db, workspace_plant_id)
             if plant is None or not plant.is_active:
@@ -126,7 +137,16 @@ class AdminReviewService:
                     code=AdminErrorCode.PLANT_ACCESS_DENIED,
                     http_status=404,
                 )
-            rows = registration_repository.list_pending_by_plant(db, workspace_plant_id)
+            rows = registration_repository.list_pending_by_plant(
+                db,
+                workspace_plant_id,
+                limit=safe_limit,
+                offset=safe_offset,
+            )
+            total = registration_repository.count_pending_by_plant(
+                db,
+                workspace_plant_id,
+            )
 
         items: list[RegistrationQueueItem] = []
         for row in rows:
@@ -145,7 +165,12 @@ class AdminReviewService:
                 )
             )
 
-        return RegistrationQueueResponse(items=items)
+        return RegistrationQueueResponse(
+            items=items,
+            total=total,
+            limit=safe_limit,
+            offset=safe_offset,
+        )
 
     def get_image_bytes(
         self,
