@@ -1,31 +1,48 @@
 {
-  "name": "@face-auth/sdk",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@ascentia/face-auth-sdk",
+  "version": "0.1.0",
+  "description": "Face authentication SDK for Mendix kiosk — camera, liveness, register, admin enroll.",
+  "license": "UNLICENSED",
   "type": "module",
-  "main": "./dist/face-auth-sdk.js",
-  "module": "./dist/face-auth-sdk.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/face-auth-sdk.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "tsup",
+    "build:check": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "pack:check": "npm run build && npm pack --dry-run"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
-    "@mediapipe/tasks-vision": "^1.0.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "@mediapipe/tasks-vision": "^1.0.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
     "vitest": "^2.1.8"

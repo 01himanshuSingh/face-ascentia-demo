@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 
+import { BrandLogo } from "./BrandLogo";
+
 export type LoginFormProps = {
   busy: boolean;
   error: string | null;
@@ -19,11 +21,8 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-5 py-12 sm:px-6">
       <div className="w-full max-w-[22rem]">
-        <header className="mb-10 text-center">
-          <h1 className="text-[1.75rem] font-semibold tracking-tight text-text sm:text-[2rem]">
-            Shift Face
-          </h1>
-          <p className="mt-2 text-sm font-medium text-text-muted">Admin Portal</p>
+        <header className="mb-10">
+          <BrandLogo size="lg" productLabel="Admin Portal" />
         </header>
 
         {notice ? (

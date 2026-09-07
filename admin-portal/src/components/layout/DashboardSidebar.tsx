@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
 
+import { BrandLogo } from "../BrandLogo";
+
 export type DashboardTab =
   | "review"
   | "grant"
@@ -159,11 +161,11 @@ export function DashboardSidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-[120%] lg:translate-x-0",
         )}
       >
-        <div className="border-b border-white/50 px-5 py-5">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-primary">
-            Shift Face
+        <div className="border-b border-white/50 px-4 py-4">
+          <BrandLogo size="md" align="start" />
+          <p className="mt-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">
+            Admin Portal
           </p>
-          <p className="mt-1 text-lg font-semibold tracking-tight text-text">Admin</p>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4" aria-label="Admin sections">

@@ -1,125 +1,29 @@
 /**
- * @face-auth/sdk — npm package entry for the Mendix team.
+ * @ascentia/face-auth-sdk — public entry for Mendix.
  *
- * Deployment boundaries:
- * - Mendix kiosk Chrome loads this SDK (camera + blink + burst)
- * - Debian backend (apiBaseUrl) owns detect / SFace / pgvector / auth decision
+ * Mendix owns: Employee ID + Authenticate + a mount container.
+ * This SDK owns: camera, liveness, capture, register / admin-kiosk overlays,
+ * and HTTPS calls to the face-auth backend (`apiBaseUrl`).
  *
- * Mendix usage:
- *
- *   import { createFaceAuthSDK } from "@face-auth/sdk";
- *
- *   const sdk = createFaceAuthSDK({
- *     apiBaseUrl: "https://face-auth.customer.example",
- *   });
- *
- *   // Mendix Authenticate button (capture + backend verify):
- *   const { employeeId, authenticated } = await sdk.authenticate("EMP001");
- *
- *   await sdk.destroy();
+ * Only symbols exported here are a compatibility contract for Mendix.
  */
 
 export {
-  FaceAuthSDK,
   createFaceAuthSDK,
+  FaceAuthSDK,
   type FaceAuthSDKConfig,
-  type FaceAuthSDKCameraSession,
   type AuthenticateOrRegisterOutcome,
 } from "./sdk/FaceAuthSDK";
 
 export type {
   CapturePhase,
-  FaceCaptureResult,
-  FaceCaptureFailure,
-  AuthenticateResult,
   MendixAuthenticateResult,
-  AuthErrorBody,
+  AuthenticateResult,
 } from "./types/auth.types";
 
-export {
-  AUTHENTICATE_EMPLOYEE_ID_FIELD,
-  AUTHENTICATE_IMAGE_FIELD,
-  AUTHENTICATE_PATH,
-  AuthErrorCode,
-  isAuthenticateResult,
-  isAuthErrorBody,
-} from "./types/auth.types";
-
-export type {
-  CameraStartOptions,
-  CameraVideoPreferences,
-  CameraError,
-  CameraErrorCode,
-  CameraStatus,
-  CameraSessionSnapshot,
-} from "./camera/camera.types";
-
-export { FACE_AUTH_CAMERA_POLICY } from "./camera/camera.types";
-
-export type {
-  RegisterRequest,
-  RegisterResult,
-  RegistrationErrorBody,
-  PlantListItem,
-} from "./types/registration.types";
+export type { RegisterResult } from "./types/registration.types";
 
 export {
-  PLANTS_PATH,
-  REGISTER_PATH,
-  REGISTER_EMPLOYEE_ID_FIELD,
-  REGISTER_PLANT_ID_FIELD,
-  REGISTER_FULL_NAME_FIELD,
-  REGISTER_IMAGE_FIELD,
-  RegistrationErrorCode,
-  RegistrationStatus,
-  RegistrationSource,
-  isRegisterResult,
-  isRegistrationErrorBody,
-  isPlantListResponse,
-} from "./types/registration.types";
-
-export {
-  createFaceAuthClient,
-  FaceAuthClient,
   FaceAuthApiError,
   isFaceAuthApiError,
-  type FaceAuthClientConfig,
-  type AuthenticateRequest,
-  type FaceAuthClientErrorCode,
 } from "./api/FaceAuthClient";
-
-/** Advanced / test-only exports — Mendix should prefer createFaceAuthSDK(). */
-export { CameraOverlay, type CameraOverlayProps } from "./components/CameraOverlay";
-export { RegisterOverlay, type RegisterOverlayProps, type RegisterSubmitPayload } from "./components/RegisterOverlay";
-export {
-  NotEnrolledChoiceOverlay,
-  type NotEnrolledChoiceOverlayProps,
-  type NotEnrolledChoice,
-} from "./components/NotEnrolledChoiceOverlay";
-export {
-  AdminEnrollLoopOverlay,
-  type AdminEnrollLoopOverlayProps,
-  type AdminEnrollSubmitPayload,
-} from "./components/AdminEnrollLoopOverlay";
-export {
-  AdminKioskLoginOverlay,
-  type AdminKioskLoginOverlayProps,
-  type AdminKioskLoginSubmitPayload,
-} from "./components/AdminKioskLoginOverlay";
-export { AuthScoreToast, type AuthScoreToastProps } from "./components/AuthScoreToast";
-export {
-  showSdkFeedbackToast,
-  dismissSdkFeedbackToast,
-} from "./ui/showSdkFeedbackToast";
-export type {
-  SdkFeedbackPayload,
-  SdkFeedbackVariant,
-  SdkFeedbackDetailRow,
-} from "./ui/feedbackToast.types";
-export { createCameraManager, CameraManager } from "./camera/CameraManager";
-export type { CameraManagerApi } from "./camera/camera.types";
-export {
-  createBurstCapture,
-  BurstCapture,
-  POST_BLINK_CAPTURE,
-} from "./camera/BurstCapture";

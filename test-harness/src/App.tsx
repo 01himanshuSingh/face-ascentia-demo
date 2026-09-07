@@ -7,8 +7,8 @@ import {
   type FaceAuthSDK,
   type MendixAuthenticateResult,
   type RegisterResult,
-} from "@face-auth/sdk";
-import { BRAND, BRAND_DERIVED } from "@face-auth/sdk/ui/brandTheme";
+} from "@ascentia/face-auth-sdk";
+import { BRAND, BRAND_DERIVED } from "./brandTheme";
 
 /**
  * Mendix integration stand-in.
@@ -215,8 +215,11 @@ export function App() {
 
         <section style={styles.integrationBox}>
           <p style={styles.integrationTitle}>Mendix wiring (reference)</p>
-          <pre style={styles.integrationCode}>{`const sdk = createFaceAuthSDK({
-  apiBaseUrl: "${apiBaseUrl ?? "https://face-auth.customer.example"}",
+          <pre style={styles.integrationCode}>{`import { createFaceAuthSDK } from "@ascentia/face-auth-sdk";
+
+const sdk = createFaceAuthSDK({
+  apiBaseUrl: "${apiBaseUrl ?? "https://face-auth-ascentia.onrender.com"}",
+  mountNode: document.getElementById("face-auth-root"),
 });
 
 const outcome = await sdk.authenticateOrRegister(employeeId);
@@ -226,7 +229,8 @@ if (outcome.outcome === "authenticated") {
   // PENDING — wait for admin portal approve
 } else if (outcome.outcome === "admin_kiosk_session_completed") {
   // Path B — admin finished batch enroll at kiosk
-}`}</pre>
+}
+await sdk.destroy();`}</pre>
         </section>
       </main>
     </div>
