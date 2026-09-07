@@ -6,12 +6,24 @@
 
 FROM python:3.12-slim
 
+# MediaPipe Tasks .so links against libEGL (and friends). Without these,
+# FaceDetector.create_from_options crashes at runtime on slim images (Render).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
+    libegl1 \
+    libglvnd0 \
+    libgles2 \
+    libxcb1 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libsm6 \
+    && ldconfig \
+    && test -e /usr/lib/x86_64-linux-gnu/libEGL.so.1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
