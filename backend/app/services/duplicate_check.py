@@ -3,11 +3,13 @@ Duplicate-face guard (1:N pgvector search at registration / enroll time).
 
 Architecture
 ------------
-  RegistrationService.register(...)     ← future consumer
+  RegistrationService.register(...)
         ↓
   DuplicateCheckService.assert_no_duplicate_in_plant(...)
         ↓
-  PostgreSQL enrollments + idx_enroll_vector (HNSW, vector_cosine_ops)
+  PostgreSQL:
+    - enrollments (ACTIVE) via idx_enroll_vector
+    - registration_requests (PENDING + embedding) via idx_reqs_pending_vector
         ↓
   DuplicateFaceError  OR  pass
 
@@ -18,9 +20,9 @@ System boundary
 
 Scalability
 -----------
-- Search is plant-scoped (workspace boundary) — not global 25k scan in Python.
-- ORDER BY embedding <=> query uses HNSW index idx_enroll_vector.
-- LIMIT 1 — only nearest ACTIVE neighbor needed for duplicate gate.
+- Search is plant-scoped (workspace boundary) — not global scan in Python.
+- ORDER BY embedding <=> query uses HNSW where indexed.
+- LIMIT 1 per source — only nearest neighbor needed for duplicate gate.
 - Login (/authenticate) stays 1:1 by employee_id and does NOT call this module.
 
 Does NOT
@@ -39,10 +41,11 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.common.enums import EnrollmentStatus
+from app.common.enums import EnrollmentStatus, RegistrationStatus
 from app.common.exceptions import DuplicateFaceError
-from app.core.config import Settings, get_settings, settings
+from app.core.config import Settings, settings
 from app.database.models.enrollment import Enrollment
+from app.database.models.registration_request import RegistrationRequest
 from app.services.face_verification import LiveFaceEmbedding
 
 logger = logging.getLogger(__name__)
@@ -50,11 +53,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class NearestEnrollmentMatch:
-    """Nearest ACTIVE enrollment in a plant by cosine similarity."""
+    """Nearest ACTIVE enrollment or PENDING registration in a plant by cosine similarity."""
 
     employee_id: str
     score: float
     threshold: float
+    source: str = "enrollment"
 
     @property
     def is_duplicate(self) -> bool:
@@ -63,10 +67,11 @@ class NearestEnrollmentMatch:
 
 class DuplicateCheckService:
     """
-    Plant-scoped 1:N duplicate detection against ACTIVE enrollment templates.
+    Plant-scoped 1:N duplicate detection against ACTIVE enrollments and
+    PENDING registration embeddings (same face, different employee_id).
 
-    Uses pgvector cosine distance (<=>) backed by HNSW — separate gate from
-    1:1 auth (``face_duplicate_cosine_threshold``, default 0.53).
+    Uses pgvector cosine distance (<=>) — separate gate from 1:1 auth
+    (``face_duplicate_cosine_threshold``, default 0.58).
     """
 
     def __init__(self, app_settings: Settings | None = None) -> None:
@@ -83,10 +88,10 @@ class DuplicateCheckService:
     ) -> None:
         """
         Raise DuplicateFaceError when live face matches another employee's
-        ACTIVE enrollment in the same plant at or above the cosine threshold.
+        ACTIVE enrollment or PENDING registration in the same plant.
 
         Args:
-            plant_id: Workspace from employees.plant_id (plant-scoped search).
+            plant_id: Workspace from form / employees.plant_id.
             employee_id: Employee being registered — excluded from neighbors.
             live_embedding: SFace vector from face_verification.extract_live_embedding.
             threshold: Cosine gate; defaults to settings.face_duplicate_cosine_threshold.
@@ -96,7 +101,7 @@ class DuplicateCheckService:
             if threshold is not None
             else self._settings.face_duplicate_cosine_threshold
         )
-        nearest = self.find_nearest_active_in_plant(
+        nearest = self.find_nearest_duplicate_in_plant(
             db,
             plant_id=plant_id,
             live_embedding=live_embedding,
@@ -107,10 +112,11 @@ class DuplicateCheckService:
             if nearest is not None:
                 logger.info(
                     "duplicate_check | plant=%s | candidate=%s | nearest=%s | "
-                    "score=%.3f | threshold=%.3f | duplicate=NO",
+                    "source=%s | score=%.3f | threshold=%.3f | duplicate=NO",
                     plant_id,
                     employee_id,
                     nearest.employee_id,
+                    nearest.source,
                     nearest.score,
                     nearest.threshold,
                 )
@@ -124,14 +130,49 @@ class DuplicateCheckService:
 
         logger.warning(
             "duplicate_check | plant=%s | candidate=%s | matched=%s | "
-            "score=%.3f | threshold=%.3f | duplicate=YES",
+            "source=%s | score=%.3f | threshold=%.3f | duplicate=YES",
             plant_id,
             employee_id,
             nearest.employee_id,
+            nearest.source,
             nearest.score,
             nearest.threshold,
         )
         raise DuplicateFaceError(matched_employee_id=nearest.employee_id)
+
+    def find_nearest_duplicate_in_plant(
+        self,
+        db: Session,
+        *,
+        plant_id: uuid.UUID,
+        live_embedding: Sequence[float] | LiveFaceEmbedding,
+        exclude_employee_id: str | None = None,
+        threshold: float | None = None,
+    ) -> NearestEnrollmentMatch | None:
+        """Return the closer of nearest ACTIVE enrollment or PENDING registration."""
+        gate = (
+            threshold
+            if threshold is not None
+            else self._settings.face_duplicate_cosine_threshold
+        )
+        active = self.find_nearest_active_in_plant(
+            db,
+            plant_id=plant_id,
+            live_embedding=live_embedding,
+            exclude_employee_id=exclude_employee_id,
+            threshold=gate,
+        )
+        pending = self.find_nearest_pending_in_plant(
+            db,
+            plant_id=plant_id,
+            live_embedding=live_embedding,
+            exclude_employee_id=exclude_employee_id,
+            threshold=gate,
+        )
+        candidates = [m for m in (active, pending) if m is not None]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda m: m.score)
 
     def find_nearest_active_in_plant(
         self,
@@ -181,6 +222,60 @@ class DuplicateCheckService:
             employee_id=str(matched_employee_id),
             score=float(score),
             threshold=gate,
+            source="enrollment",
+        )
+
+    def find_nearest_pending_in_plant(
+        self,
+        db: Session,
+        *,
+        plant_id: uuid.UUID,
+        live_embedding: Sequence[float] | LiveFaceEmbedding,
+        exclude_employee_id: str | None = None,
+        threshold: float | None = None,
+    ) -> NearestEnrollmentMatch | None:
+        """
+        Return the closest PENDING registration with a stored embedding in plant_id.
+
+        Blocks the same face from submitting multiple PENDING rows under
+        different employee_ids before either is approved.
+        """
+        gate = (
+            threshold
+            if threshold is not None
+            else self._settings.face_duplicate_cosine_threshold
+        )
+        query_vector = _coerce_embedding_vector(
+            live_embedding,
+            expected=self._settings.face_embedding_dimensions,
+        )
+
+        distance_expr = RegistrationRequest.embedding.cosine_distance(query_vector)
+        similarity_expr = (1 - distance_expr).label("score")
+
+        stmt = (
+            select(RegistrationRequest.employee_id, similarity_expr)
+            .where(
+                RegistrationRequest.plant_id == plant_id,
+                RegistrationRequest.status == RegistrationStatus.PENDING.value,
+                RegistrationRequest.embedding.is_not(None),
+            )
+            .order_by(distance_expr)
+            .limit(1)
+        )
+        if exclude_employee_id:
+            stmt = stmt.where(RegistrationRequest.employee_id != exclude_employee_id)
+
+        row = db.execute(stmt).first()
+        if row is None:
+            return None
+
+        matched_employee_id, score = row
+        return NearestEnrollmentMatch(
+            employee_id=str(matched_employee_id),
+            score=float(score),
+            threshold=gate,
+            source="pending_registration",
         )
 
 

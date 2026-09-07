@@ -4,11 +4,13 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.enums import RegistrationStatus
+from app.core.config import settings
 from app.database.base import Base
 
 if TYPE_CHECKING:
@@ -26,6 +28,8 @@ class RegistrationRequest(Base):
     capture reused from the auth attempt (SDK-side); stored via raw_images.
 
     Image bytes live in raw_images (never joined in list queries).
+    embedding stores the SFace vector at submit time for PENDING 1:N duplicate gate
+    (nullable for legacy rows created before migration 20260907_0013).
 
     kiosk_id is optional (nullable). Current rollout: Path A and Path B omit kiosk
     device id — column is NULL until fleet registry exists.
@@ -78,6 +82,10 @@ class RegistrationRequest(Base):
         server_default=RegistrationStatus.PENDING.value,
     )
     submitted_full_name: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(settings.face_embedding_dimensions),
+        nullable=True,
+    )
     session_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(
         Text,

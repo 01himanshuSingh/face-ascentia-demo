@@ -105,6 +105,7 @@ def create_pending(
     plant_id: uuid.UUID,
     submitted_full_name: str,
     source: RegistrationSource,
+    embedding: list[float] | None = None,
     kiosk_id: str | None = None,
     session_id: str | None = None,
 ) -> RegistrationRequest:
@@ -112,6 +113,7 @@ def create_pending(
     Insert a PENDING registration_requests row and flush.
 
     employee_id is the business ID submitted at the kiosk — no employees row required.
+    embedding is the SFace vector used for plant-scoped PENDING duplicate checks.
     """
     row = RegistrationRequest(
         employee_id=employee_id,
@@ -119,6 +121,7 @@ def create_pending(
         submitted_full_name=submitted_full_name,
         source=source.value,
         status=RegistrationStatus.PENDING.value,
+        embedding=embedding,
         kiosk_id=_optional_text(kiosk_id),
         session_id=_optional_text(session_id),
     )

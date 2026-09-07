@@ -383,14 +383,15 @@ class PendingRegistrationExistsError(RegistrationError):
 
 
 class DuplicateFaceError(RegistrationError):
-    """Live embedding matches another employee's ACTIVE enrollment (1:N guard)."""
+    """Live embedding matches another employee's ACTIVE enrollment or PENDING registration."""
 
     def __init__(self, *, matched_employee_id: str | None = None) -> None:
         details: dict[str, Any] = {}
         if matched_employee_id is not None:
             details["matched_employee_id"] = matched_employee_id
         super().__init__(
-            "This face matches an existing enrollment for another employee.",
+            "This face matches an existing enrollment or pending registration "
+            "for another employee.",
             code=RegistrationErrorCode.DUPLICATE_FACE,
             http_status=409,
             details=details or None,

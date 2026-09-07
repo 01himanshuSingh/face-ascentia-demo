@@ -122,6 +122,7 @@ class RegistrationService:
                 plant_id=resolved_plant_id,
                 submitted_full_name=normalized_name,
                 source=RegistrationSource.KIOSK,
+                embedding=list(live.vector),
                 kiosk_id=kiosk_id,
                 session_id=session_id,
             )
