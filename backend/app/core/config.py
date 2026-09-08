@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # 1:1 cosine gate for POST /authenticate (higher = stricter).
     # OpenCV SFace common starting point (~0.363). Tune per plant after score logs.
     face_match_cosine_threshold: float = Field(
-        default=0.463,
+        default=0.493,
         ge=-1.0,
         le=1.0,
     )
