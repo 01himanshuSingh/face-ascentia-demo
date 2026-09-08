@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { AdminUserItem } from "../../api/adminApi";
+import { PlantAdminDetailSheet } from "./PlantAdminDetailSheet";
 import { PlantAdminsTable } from "./PlantAdminsTable";
 import { RevokeAdminDialog } from "./RevokeAdminDialog";
 
@@ -36,6 +37,7 @@ export function PlantAdminsPanel({
   onRevoke,
 }: PlantAdminsPanelProps) {
   const [revokeTarget, setRevokeTarget] = useState<AdminUserItem | null>(null);
+  const [detailAdmin, setDetailAdmin] = useState<AdminUserItem | null>(null);
 
   if (needsPlant) {
     return (
@@ -88,7 +90,20 @@ export function PlantAdminsPanel({
         totalPages={totalPages}
         onPageChange={onPageChange}
         onRevoke={setRevokeTarget}
+        onSelect={setDetailAdmin}
       />
+
+      {detailAdmin ? (
+        <PlantAdminDetailSheet
+          admin={detailAdmin}
+          busy={busy}
+          onClose={() => setDetailAdmin(null)}
+          onUngrant={(admin) => {
+            setDetailAdmin(null);
+            setRevokeTarget(admin);
+          }}
+        />
+      ) : null}
 
       {revokeTarget ? (
         <RevokeAdminDialog

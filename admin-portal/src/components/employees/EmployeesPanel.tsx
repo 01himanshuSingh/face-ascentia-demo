@@ -4,6 +4,7 @@ import type {
   AdminEmployeeItem,
   EmployeeListStatus,
 } from "../../api/adminApi";
+import { EmployeeDetailSheet } from "./EmployeeDetailSheet";
 import { EmployeesTable } from "./EmployeesTable";
 import { RevokeEmployeeDialog } from "./RevokeEmployeeDialog";
 
@@ -50,6 +51,8 @@ export function EmployeesPanel({
   const [revokeTarget, setRevokeTarget] = useState<AdminEmployeeItem | null>(
     null,
   );
+  const [detailEmployee, setDetailEmployee] =
+    useState<AdminEmployeeItem | null>(null);
 
   if (needsPlant) {
     return (
@@ -99,7 +102,10 @@ export function EmployeesPanel({
             type="button"
             role="tab"
             aria-selected={rosterStatus === tab.id}
-            onClick={() => onRosterStatusChange(tab.id)}
+            onClick={() => {
+              setDetailEmployee(null);
+              onRosterStatusChange(tab.id);
+            }}
             className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${
               rosterStatus === tab.id
                 ? "bg-white text-text shadow-sm"
@@ -128,12 +134,26 @@ export function EmployeesPanel({
         busy={busy}
         rosterStatus={rosterStatus}
         onRevoke={setRevokeTarget}
+        onSelect={setDetailEmployee}
         total={total}
         page={page}
         pageSize={pageSize}
         totalPages={totalPages}
         onPageChange={onPageChange}
       />
+
+      {detailEmployee ? (
+        <EmployeeDetailSheet
+          employee={detailEmployee}
+          rosterStatus={rosterStatus}
+          busy={busy}
+          onClose={() => setDetailEmployee(null)}
+          onRevoke={(employee) => {
+            setDetailEmployee(null);
+            setRevokeTarget(employee);
+          }}
+        />
+      ) : null}
 
       {revokeTarget ? (
         <RevokeEmployeeDialog
