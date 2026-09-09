@@ -15,13 +15,16 @@
  *   GET  /admin/plants                         (catalog incl. inactive — PLANTS_MANAGE)
  *   POST /admin/plants                         (create)
  *   GET  /admin/audit?plantId=&category=&q=&cursor=  (AUDIT_VIEW; text only)
+ *   GET  /admin/auth-log?plantId=&result=&reasonCode=&q=  (AUTH_LOG_VIEW; LOGIN text)
+ *   GET  /admin/auth-log/summary?plantId=…               (AUTH_LOG_VIEW; KPIs)
  *
  * Plant layers (do not merge)
  * ---------------------------
  *   A) Workspace lens — which plant am I working in? (sessionStorage + GET /plants)
  *   B) Plant catalog  — create / update / soft-deactivate (GET/POST/PATCH /admin/plants)
  *   C) Plant admins   — list/search/ungrant in workspace (GET/POST /admin/users*)
- *   D) Audit log      — plant-scoped keyset timeline (GET /admin/audit)
+ *   D) Audit log      — plant-scoped compliance timeline (GET /admin/audit)
+ *   E) Auth log       — kiosk LOGIN attempts + match% (GET /admin/auth-log*) — not an Audit chip
  *
  * Pending queue follows active plant workspace (not client-side row filter):
  *   PLANT_ADMIN — session.plantId (fixed)
@@ -50,6 +53,8 @@ export const AdminPermission = {
   ADMIN_GRANT_PLANT_ADMIN: "ADMIN_GRANT_PLANT_ADMIN",
   PLANTS_MANAGE: "PLANTS_MANAGE",
   AUDIT_VIEW: "AUDIT_VIEW",
+  /** Dedicated Auth Log tab — LOGIN attempts only (not compliance Audit). */
+  AUTH_LOG_VIEW: "AUTH_LOG_VIEW",
   EMPLOYEE_REVOKE: "EMPLOYEE_REVOKE",
 } as const;
 
@@ -132,6 +137,15 @@ export function canViewAudit(session: AdminSession): boolean {
   return hasPermission(session, AdminPermission.AUDIT_VIEW);
 }
 
+/**
+ * UI gate for Auth Log tab — kiosk authenticate attempts (text + match%).
+ * Backend still enforces AUTH_LOG_VIEW + plant scope on GET /admin/auth-log*.
+ * Separate from canViewAudit — do not reuse Audit chips for LOGIN rows.
+ */
+export function canViewAuthLog(session: AdminSession): boolean {
+  return hasPermission(session, AdminPermission.AUTH_LOG_VIEW);
+}
+
 /** Face peek in APPROVE/kiosk audit dialog — separate from AUDIT_VIEW. */
 export function canViewAuditEnrollmentImage(session: AdminSession): boolean {
   return hasPermission(session, AdminPermission.REGISTRATION_VIEW_IMAGE);
@@ -191,6 +205,7 @@ export type RegistrationQueueResult = {
 export const PENDING_PAGE_SIZE = 15;
 export const EMPLOYEE_PAGE_SIZE = 15;
 export const AUDIT_PAGE_SIZE = 15;
+export const AUTH_LOG_PAGE_SIZE = 15;
 export const PLANT_PAGE_SIZE = 15;
 export const ADMIN_PAGE_SIZE = 15;
 
@@ -287,6 +302,67 @@ export type AuditLogListResult = {
   limit?: number;
   offset?: number;
   nextCursor: string | null;
+};
+
+/** Auth Log result filter → GET /admin/auth-log?result= */
+export type AuthLogResultFilter = "all" | "SUCCESS" | "FAILURE";
+
+export type AuthLogResult = "SUCCESS" | "FAILURE";
+
+/** Stable reason codes from backend AuthLogReasonCode (filter + detail). */
+export type AuthLogReasonCode =
+  | "MATCH_OK"
+  | "FACE_MISMATCH"
+  | "MISSING_EMPLOYEE_ID"
+  | "EMPLOYEE_NOT_FOUND"
+  | "EMPLOYEE_INACTIVE"
+  | "ENROLLMENT_NOT_FOUND"
+  | "EMPTY_IMAGE"
+  | "INVALID_IMAGE"
+  | "UNSUPPORTED_IMAGE_TYPE"
+  | "IMAGE_TOO_LARGE"
+  | "NO_FACE"
+  | "MULTIPLE_FACES"
+  | "DETECT_FAILED"
+  | "EMBED_FAILED"
+  | "EMBEDDING_DIMENSION_MISMATCH"
+  | "UNKNOWN";
+
+/** One LOGIN attempt — GET /admin/auth-log item (text only; no face bytes). */
+export type AuthLogItem = {
+  logId: string;
+  createdAt: string;
+  plantId: string;
+  employeeId: string;
+  result: AuthLogResult;
+  reasonCode: AuthLogReasonCode | string;
+  reasonLabel: string;
+  /** 0–100 when a 1:1 score ran; null otherwise. */
+  matchPercent: number | null;
+  score: number | null;
+  threshold: number | null;
+  message: string | null;
+};
+
+export type AuthLogListResult = {
+  items: AuthLogItem[];
+  plantId: string;
+  total: number;
+  limit?: number;
+  offset?: number;
+};
+
+/** KPI strip — GET /admin/auth-log/summary */
+export type AuthLogSummaryResult = {
+  plantId: string;
+  from: string;
+  to: string;
+  totalAttempts: number;
+  successCount: number;
+  failureCount: number;
+  successRatePercent: number | null;
+  topFailureReasonCode: AuthLogReasonCode | string | null;
+  topFailureReasonLabel: string | null;
 };
 
 /** Worker row for Employees tab (Active or Left roster). */
@@ -930,6 +1006,104 @@ export async function listAuditLogs(
 
   return requestJson<AuditLogListResult>(
     `/admin/audit?${params.toString()}`,
+    { method: "GET" },
+    token,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Auth Log (Layer E — plant workspace; LOGIN attempts; offset pages; text only)
+// ---------------------------------------------------------------------------
+
+export type AuthLogListOptions = {
+  result?: AuthLogResultFilter;
+  reasonCode?: AuthLogReasonCode | string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+  from?: string;
+  to?: string;
+};
+
+function buildAuthLogQueryParams(
+  plantId: string,
+  options: AuthLogListOptions | undefined,
+  includePagination: boolean,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("plantId", plantId);
+  if (options?.result && options.result !== "all") {
+    params.set("result", options.result);
+  }
+  const reasonCode = options?.reasonCode?.trim();
+  if (reasonCode) {
+    params.set("reasonCode", reasonCode);
+  }
+  const q = options?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
+  if (options?.from) {
+    params.set("from", options.from);
+  }
+  if (options?.to) {
+    params.set("to", options.to);
+  }
+  if (includePagination) {
+    const limit = options?.limit ?? AUTH_LOG_PAGE_SIZE;
+    params.set("limit", String(limit));
+    if (options?.offset != null) {
+      params.set("offset", String(options.offset));
+    }
+  }
+  return params;
+}
+
+function requirePlantId(plantId: string): string {
+  const trimmedPlant = plantId.trim();
+  if (!trimmedPlant) {
+    throw new AdminApiClientError(
+      {
+        detail: "plantId is required.",
+        code: "PLANT_ACCESS_DENIED",
+      },
+      400,
+    );
+  }
+  return trimmedPlant;
+}
+
+/**
+ * GET /admin/auth-log — plant-scoped kiosk authenticate attempts.
+ * Includes matchPercent when a face score was computed. No images.
+ */
+export async function listAuthLogs(
+  token: string,
+  plantId: string,
+  options?: AuthLogListOptions,
+): Promise<AuthLogListResult> {
+  const trimmedPlant = requirePlantId(plantId);
+  const params = buildAuthLogQueryParams(trimmedPlant, options, true);
+  return requestJson<AuthLogListResult>(
+    `/admin/auth-log?${params.toString()}`,
+    { method: "GET" },
+    token,
+  );
+}
+
+/**
+ * GET /admin/auth-log/summary — KPI strip for the same filters as the list.
+ * No pagination (aggregates over the filtered window).
+ */
+export async function fetchAuthLogSummary(
+  token: string,
+  plantId: string,
+  options?: Omit<AuthLogListOptions, "limit" | "offset">,
+): Promise<AuthLogSummaryResult> {
+  const trimmedPlant = requirePlantId(plantId);
+  const params = buildAuthLogQueryParams(trimmedPlant, options, false);
+  return requestJson<AuthLogSummaryResult>(
+    `/admin/auth-log/summary?${params.toString()}`,
     { method: "GET" },
     token,
   );

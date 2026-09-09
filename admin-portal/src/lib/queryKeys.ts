@@ -1,4 +1,4 @@
-/** Centralized query keys — plant workspace on pending, catalog, admins, audit. */
+/** Centralized query keys — plant workspace on pending, catalog, admins, audit, auth log. */
 
 export const adminQueryKeys = {
   all: ["admin"] as const,
@@ -50,7 +50,8 @@ export const adminQueryKeys = {
       page,
     ] as const,
   /**
-   * Audit timeline — GET /admin/audit (offset pages).
+   * Compliance Audit timeline — GET /admin/audit (offset pages).
+   * Never includes LOGIN / Auth Log rows.
    */
   audit: (
     sessionToken: string,
@@ -67,6 +68,55 @@ export const adminQueryKeys = {
       category,
       q,
       page,
+    ] as const,
+  /**
+   * Auth Log list — GET /admin/auth-log (LOGIN attempts; offset pages).
+   * Separate key tree from ``audit`` so compliance cache never mixes with kiosk logins.
+   */
+  authLog: (
+    sessionToken: string,
+    plantId: string,
+    result: string,
+    reasonCode: string,
+    q: string,
+    from: string,
+    to: string,
+    page: number,
+  ) =>
+    [
+      ...adminQueryKeys.all,
+      "auth-log",
+      sessionToken,
+      plantId,
+      result,
+      reasonCode || "",
+      q,
+      from || "",
+      to || "",
+      page,
+    ] as const,
+  /**
+   * Auth Log KPIs — GET /admin/auth-log/summary (same filters as list; no page).
+   */
+  authLogSummary: (
+    sessionToken: string,
+    plantId: string,
+    result: string,
+    reasonCode: string,
+    q: string,
+    from: string,
+    to: string,
+  ) =>
+    [
+      ...adminQueryKeys.all,
+      "auth-log-summary",
+      sessionToken,
+      plantId,
+      result,
+      reasonCode || "",
+      q,
+      from || "",
+      to || "",
     ] as const,
   grantPreview: (sessionToken: string, employeeId: string) =>
     [...adminQueryKeys.all, "grant-preview", sessionToken, employeeId] as const,

@@ -1,5 +1,5 @@
 """
-Authentication service (Week 1 POST /authenticate orchestration).
+Authentication service (POST /authenticate orchestration).
 
 Architecture
 ------------
@@ -11,6 +11,8 @@ Architecture
         ↓
   face_verification.verify_image_against_reference(...)
         ↓
+  Auth Log write (audit_log action=LOGIN, text metadata only)
+        ↓
   AuthenticateResponse (HTTP 200)
 
 System boundary
@@ -18,35 +20,59 @@ System boundary
 - IN:  employee_id, image bytes (+ optional content_type from multipart)
 - OUT: AuthenticateResponse OR AuthError subclass (raised to main.py)
 
-Wrong face → authenticated=false on HTTP 200 (not an exception).
-Missing employee / enrollment / bad image → AuthError.
+Wrong face → authenticated=false on HTTP 200 (not an exception) + LOGIN FAILURE.
+Missing employee / enrollment / bad image → AuthError + LOGIN FAILURE when plant known.
+
+Auth Log (append-only)
+----------------------
+Every attempt that resolves to a known employee.plant_id writes one ``LOGIN`` row:
+  metadata.result       → AuthLogResult
+  metadata.reason_code  → AuthLogReasonCode
+  metadata.score / threshold when a 1:1 score was computed (portal shows %)
+
+``EMPLOYEE_NOT_FOUND`` / missing id / pre-lookup validation cannot set plant_id
+(audit_log.plant_id is required; actor_id FK needs a real employee) — those
+attempts are application-logged only until a future plant-scoped kiosk context
+exists. Compliance Audit chips never include LOGIN.
 
 Does NOT
 --------
 - Capture camera frames (SDK)
 - Parse multipart form (route)
 - Run 1:N gallery search
-- Registration / audit (later phases)
+- Store face bytes / embeddings in audit metadata
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any, Sequence
 
 from sqlalchemy.orm import Session
 
-from app.common.enums import EmployeeStatus
+from app.common.enums import (
+    AUTH_LOG_METADATA_MESSAGE_KEY,
+    AUTH_LOG_METADATA_REASON_CODE_KEY,
+    AUTH_LOG_METADATA_RESULT_KEY,
+    AUTH_LOG_METADATA_SCORE_KEY,
+    AUTH_LOG_METADATA_THRESHOLD_KEY,
+    AuditAction,
+    AuthLogReasonCode,
+    AuthLogResult,
+    EmployeeStatus,
+)
 from app.common.exceptions import (
     ActiveEnrollmentNotFoundError,
+    AuthError,
     EmployeeInactiveError,
     EmployeeNotFoundError,
     MissingEmployeeIdError,
     UnsupportedImageTypeError,
 )
-from app.core.config import Settings, get_settings, settings
-from app.repositories import employee_repository, enrollment_repository
-from app.schemas.auth import AuthenticateFormFields, AuthenticateResponse
+from app.core.config import Settings, settings
+from app.repositories import audit_repository, employee_repository, enrollment_repository
+from app.schemas.auth import AuthErrorCode, AuthenticateFormFields, AuthenticateResponse
 from app.services.face_verification import (
     FaceVerificationService,
     get_shared_face_verification_service,
@@ -55,6 +81,8 @@ from app.services.face_verification import (
 logger = logging.getLogger(__name__)
 
 _ACCEPTED_IMAGE_TYPES = AuthenticateFormFields().accepted_image_types
+_AUTH_LOG_TARGET_TYPE = "employee"
+_AUTH_LOG_ACTOR_ROLE = "KIOSK"
 
 
 class AuthenticationService:
@@ -82,7 +110,7 @@ class AuthenticationService:
         content_type: str | None = None,
     ) -> AuthenticateResponse:
         """
-        Week 1 authenticate pipeline for one Employee ID + one kiosk still.
+        Authenticate pipeline for one Employee ID + one kiosk still.
 
         Args:
             db: Request-scoped SQLAlchemy session.
@@ -97,49 +125,164 @@ class AuthenticationService:
             AuthError subclasses when verification cannot run to a score.
         """
         normalized_id = self._normalize_employee_id(employee_id)
-        self._validate_content_type(content_type)
+        plant_id: uuid.UUID | None = None
 
-        employee = employee_repository.get_by_id(db, normalized_id)
-        if employee is None:
-            raise EmployeeNotFoundError(normalized_id)
-        if employee.status != EmployeeStatus.ACTIVE.value:
-            raise EmployeeInactiveError(normalized_id)
+        try:
+            self._validate_content_type(content_type)
 
-        enrollment = enrollment_repository.get_active_by_employee_id(db, normalized_id)
-        if enrollment is None:
-            raise ActiveEnrollmentNotFoundError(normalized_id)
+            employee = employee_repository.get_by_id(db, normalized_id)
+            if employee is None:
+                raise EmployeeNotFoundError(normalized_id)
 
-        reference_embedding = _coerce_embedding(enrollment.embedding)
+            plant_id = employee.plant_id
 
-        verification = self._face_verification.verify_image_against_reference(
-            image_bytes,
-            reference_embedding,
-        )
+            if employee.status != EmployeeStatus.ACTIVE.value:
+                raise EmployeeInactiveError(normalized_id)
 
-        authenticated = verification.matched
-        message = self._result_message(
-            authenticated=authenticated,
-            full_name=employee.full_name,
-        )
+            enrollment = enrollment_repository.get_active_by_employee_id(
+                db, normalized_id
+            )
+            if enrollment is None:
+                raise ActiveEnrollmentNotFoundError(normalized_id)
 
-        logger.info(
-            "auth | employee=%s | face_score=%.3f | threshold=%.3f | match=%s | detect=%.3f",
-            normalized_id,
-            verification.score,
-            verification.threshold,
-            "YES" if authenticated else "NO",
-            verification.detection_score,
-        )
+            reference_embedding = _coerce_embedding(enrollment.embedding)
 
-        return AuthenticateResponse(
-            employee_id=normalized_id,
-            authenticated=authenticated,
-            score=verification.score,
-            threshold=verification.threshold,
-            message=message,
-            full_name=employee.full_name if authenticated else None,
-            model_version=verification.live_model_version,
-            enrollment_model_version=enrollment.model_version,
+            verification = self._face_verification.verify_image_against_reference(
+                image_bytes,
+                reference_embedding,
+            )
+
+            authenticated = verification.matched
+            message = self._result_message(
+                authenticated=authenticated,
+                full_name=employee.full_name,
+            )
+            result = (
+                AuthLogResult.SUCCESS if authenticated else AuthLogResult.FAILURE
+            )
+            reason = (
+                AuthLogReasonCode.MATCH_OK
+                if authenticated
+                else AuthLogReasonCode.FACE_MISMATCH
+            )
+
+            logger.info(
+                "auth | employee=%s | face_score=%.3f | threshold=%.3f | match=%s | detect=%.3f",
+                normalized_id,
+                verification.score,
+                verification.threshold,
+                "YES" if authenticated else "NO",
+                verification.detection_score,
+            )
+
+            response = AuthenticateResponse(
+                employee_id=normalized_id,
+                authenticated=authenticated,
+                score=verification.score,
+                threshold=verification.threshold,
+                message=message,
+                full_name=employee.full_name if authenticated else None,
+                model_version=verification.live_model_version,
+                enrollment_model_version=enrollment.model_version,
+            )
+
+            self._commit_login_attempt(
+                db,
+                plant_id=plant_id,
+                employee_id=normalized_id,
+                result=result,
+                reason_code=reason,
+                message=message,
+                score=verification.score,
+                threshold=verification.threshold,
+            )
+            return response
+
+        except AuthError as exc:
+            if plant_id is not None:
+                self._commit_login_attempt(
+                    db,
+                    plant_id=plant_id,
+                    employee_id=normalized_id,
+                    result=AuthLogResult.FAILURE,
+                    reason_code=_reason_from_auth_error(exc),
+                    message=str(exc),
+                    score=None,
+                    threshold=None,
+                )
+            else:
+                logger.info(
+                    "auth | employee=%s | failure=%s | auth_log=skipped (no plant_id)",
+                    normalized_id,
+                    exc.auth_code.value,
+                )
+            raise
+
+    def _commit_login_attempt(
+        self,
+        db: Session,
+        *,
+        plant_id: uuid.UUID,
+        employee_id: str,
+        result: AuthLogResult,
+        reason_code: AuthLogReasonCode,
+        message: str,
+        score: float | None,
+        threshold: float | None,
+    ) -> None:
+        """Append LOGIN row and commit. Never fails the authenticate response."""
+        try:
+            self._record_login_attempt(
+                db,
+                plant_id=plant_id,
+                employee_id=employee_id,
+                result=result,
+                reason_code=reason_code,
+                message=message,
+                score=score,
+                threshold=threshold,
+            )
+            db.commit()
+        except Exception:
+            logger.exception(
+                "auth | LOGIN audit write failed | employee=%s | reason=%s",
+                employee_id,
+                reason_code.value,
+            )
+            db.rollback()
+
+    @staticmethod
+    def _record_login_attempt(
+        db: Session,
+        *,
+        plant_id: uuid.UUID,
+        employee_id: str,
+        result: AuthLogResult,
+        reason_code: AuthLogReasonCode,
+        message: str,
+        score: float | None,
+        threshold: float | None,
+    ) -> None:
+        """Insert one text-only LOGIN row. Caller owns commit."""
+        metadata: dict[str, Any] = {
+            AUTH_LOG_METADATA_RESULT_KEY: result.value,
+            AUTH_LOG_METADATA_REASON_CODE_KEY: reason_code.value,
+            AUTH_LOG_METADATA_MESSAGE_KEY: message,
+        }
+        if score is not None:
+            metadata[AUTH_LOG_METADATA_SCORE_KEY] = float(score)
+        if threshold is not None:
+            metadata[AUTH_LOG_METADATA_THRESHOLD_KEY] = float(threshold)
+
+        audit_repository.create_entry(
+            db,
+            action=AuditAction.LOGIN.value,
+            plant_id=plant_id,
+            actor_id=employee_id,
+            actor_role=_AUTH_LOG_ACTOR_ROLE,
+            target_type=_AUTH_LOG_TARGET_TYPE,
+            target_id=employee_id,
+            metadata=metadata,
         )
 
     @staticmethod
@@ -169,6 +312,15 @@ class AuthenticationService:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _reason_from_auth_error(exc: AuthError) -> AuthLogReasonCode:
+    """Map AuthErrorCode → AuthLogReasonCode (same string values where aligned)."""
+    code: AuthErrorCode = exc.auth_code
+    try:
+        return AuthLogReasonCode(code.value)
+    except ValueError:
+        return AuthLogReasonCode.UNKNOWN
 
 
 def _coerce_embedding(values: Any) -> list[float]:

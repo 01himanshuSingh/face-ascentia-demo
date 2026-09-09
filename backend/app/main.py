@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes.admin import router as admin_router
 from app.api.routes.admin_audit import router as admin_audit_router
+from app.api.routes.admin_auth_log import router as admin_auth_log_router
 from app.api.routes.admin_employees import router as admin_employees_router
 from app.api.routes.admin_plants import router as admin_plants_router
 from app.api.routes.auth import router as auth_router
@@ -50,6 +51,7 @@ app.include_router(plants_router)
 app.include_router(admin_router)
 app.include_router(admin_plants_router)
 app.include_router(admin_audit_router)
+app.include_router(admin_auth_log_router)
 app.include_router(admin_employees_router)
 app.include_router(kiosk_admin_router)
 

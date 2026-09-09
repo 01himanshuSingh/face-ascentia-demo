@@ -10,6 +10,7 @@
  *   usePlantAdmins       SUPER plant-admin roster + ungrant
  *   usePlantEmployees    ACTIVE enrolled workers + soft revoke
  *   useAuditLog          plant-scoped compliance timeline (AUDIT_VIEW)
+ *   useAuthLog           kiosk LOGIN attempts (AUTH_LOG_VIEW) — not Audit chips
  *
  * Security: plant scoping stays on the backend. This file passes
  * workspacePlantId to APIs; it does not filter rows in the client.
@@ -25,11 +26,13 @@ import {
   canRevokePlantAdmins,
   canViewAudit,
   canViewAuditEnrollmentImage,
+  canViewAuthLog,
   canRevokeEmployees,
   type AdminSession,
 } from "./api/adminApi";
 import { PlantAdminsPanel } from "./components/admins/PlantAdminsPanel";
 import { AuditLogPanel } from "./components/audit/AuditLogPanel";
+import { AuthLogPanel } from "./components/authLog/AuthLogPanel";
 import { EmployeesPanel } from "./components/employees/EmployeesPanel";
 import { GrantAdminForm } from "./components/GrantAdminForm";
 import {
@@ -45,6 +48,7 @@ import { RequestDetails } from "./components/RequestDetails";
 import { RequestTable } from "./components/RequestTable";
 import { useAdminSession } from "./hooks/useAdminSession";
 import { useAuditLog } from "./hooks/useAuditLog";
+import { useAuthLog } from "./hooks/useAuthLog";
 import { useGrantAdmin } from "./hooks/useGrantAdmin";
 import { usePlantAdmins } from "./hooks/usePlantAdmins";
 import { usePlantCatalog } from "./hooks/usePlantCatalog";
@@ -75,6 +79,9 @@ function tabTitle(tab: DashboardTab): string {
   if (tab === "audit") {
     return "Audit log";
   }
+  if (tab === "authLog") {
+    return "Auth log";
+  }
   if (tab === "employees") {
     return "Employees";
   }
@@ -93,6 +100,9 @@ function tabSubtitle(tab: DashboardTab): string {
   }
   if (tab === "audit") {
     return "Plant actions for the last 7 days. Open a row for details.";
+  }
+  if (tab === "authLog") {
+    return "Kiosk face login success and failure for today. Match % when scored.";
   }
   if (tab === "employees") {
     return "Active enrolled workers and left / revoked history.";
@@ -125,6 +135,7 @@ export function App() {
   const showPlantsTab = session ? canManagePlants(session) : false;
   const showAdminsTab = session ? canRevokePlantAdmins(session) : false;
   const showAuditTab = session ? canViewAudit(session) : false;
+  const showAuthLogTab = session ? canViewAuthLog(session) : false;
   const showEmployeesTab = session ? canRevokeEmployees(session) : false;
 
   const reviewEnabled = view === "dashboard" && activeTab === "review";
@@ -136,6 +147,8 @@ export function App() {
     view === "dashboard" && activeTab === "admins" && showAdminsTab;
   const auditEnabled =
     view === "dashboard" && activeTab === "audit" && showAuditTab;
+  const authLogEnabled =
+    view === "dashboard" && activeTab === "authLog" && showAuthLogTab;
   const employeesEnabled =
     view === "dashboard" && activeTab === "employees" && showEmployeesTab;
 
@@ -172,6 +185,13 @@ export function App() {
     onAuthFailure: handleAuthFailure,
   });
 
+  const authLog = useAuthLog({
+    session,
+    workspacePlantId: workspace.workspacePlantId,
+    enabled: authLogEnabled,
+    onAuthFailure: handleAuthFailure,
+  });
+
   const plantEmployees = usePlantEmployees({
     session,
     workspacePlantId: workspace.workspacePlantId,
@@ -189,6 +209,7 @@ export function App() {
       activeTab === "grant" ||
       activeTab === "admins" ||
       activeTab === "audit" ||
+      activeTab === "authLog" ||
       activeTab === "employees");
 
   const navItems = useMemo(() => {
@@ -227,6 +248,13 @@ export function App() {
         icon: sidebarIcons.audit,
       });
     }
+    if (showAuthLogTab) {
+      items.push({
+        id: "authLog",
+        label: "Auth Log",
+        icon: sidebarIcons.authLog,
+      });
+    }
     if (showPlantsTab) {
       items.push({
         id: "plants",
@@ -238,6 +266,7 @@ export function App() {
   }, [
     showAdminsTab,
     showAuditTab,
+    showAuthLogTab,
     showEmployeesTab,
     showGrantTab,
     showPlantsTab,
@@ -371,6 +400,16 @@ export function App() {
                     type="button"
                     onClick={() => void audit.refresh()}
                     disabled={audit.loading}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                  >
+                    Refresh
+                  </button>
+                ) : null}
+                {activeTab === "authLog" ? (
+                  <button
+                    type="button"
+                    onClick={() => void authLog.refresh()}
+                    disabled={authLog.loading || authLog.summaryLoading}
                     className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
                   >
                     Refresh
@@ -527,6 +566,41 @@ export function App() {
                   onCategoryChange={audit.setCategory}
                   onSearchChange={audit.setSearchInput}
                   onPageChange={audit.goToPage}
+                />
+              </main>
+            ) : null}
+
+            {activeTab === "authLog" && showAuthLogTab ? (
+              <main className="rounded-[1.35rem] glass-panel p-5">
+                <AuthLogPanel
+                  items={authLog.items}
+                  loading={authLog.loading}
+                  summaryLoading={authLog.summaryLoading}
+                  summary={authLog.summary}
+                  total={authLog.total}
+                  page={authLog.page}
+                  pageSize={authLog.pageSize}
+                  totalPages={authLog.totalPages}
+                  result={authLog.result}
+                  reasonCode={
+                    typeof authLog.reasonCode === "string"
+                      ? authLog.reasonCode
+                      : ""
+                  }
+                  searchInput={authLog.searchInput}
+                  from={authLog.from}
+                  to={authLog.to}
+                  needsPlant={authLog.needsPlant}
+                  workspaceLabel={workspaceLabel}
+                  selected={authLog.selected}
+                  onResultChange={authLog.setResult}
+                  onReasonCodeChange={authLog.setReasonCode}
+                  onSearchChange={authLog.setSearchInput}
+                  onFromChange={authLog.setFrom}
+                  onToChange={authLog.setTo}
+                  onPageChange={authLog.goToPage}
+                  onSelect={authLog.openDetail}
+                  onCloseDetail={authLog.closeDetail}
                 />
               </main>
             ) : null}

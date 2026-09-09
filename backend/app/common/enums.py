@@ -59,6 +59,10 @@ class AdminPermissionCode(StrEnum):
     # Dedicated so audit UI can be revoked without removing registration review.
     # No images in this permission — face bytes stay on registration image routes.
     AUDIT_VIEW = "AUDIT_VIEW"
+    # Read-only plant-scoped kiosk authentication attempts (GET /admin/auth-log).
+    # Separate from AUDIT_VIEW so Auth Log can be granted/revoked without
+    # compliance Audit access (and vice versa). Text metadata only — no faces.
+    AUTH_LOG_VIEW = "AUTH_LOG_VIEW"
     # Soft-revoke approved workers: INACTIVE + enrollment REVOKED (+ auto-ungrant).
     # Plant-scoped; does not hard-delete employee_id.
     EMPLOYEE_REVOKE = "EMPLOYEE_REVOKE"
@@ -70,7 +74,7 @@ class AdminPermissionCode(StrEnum):
 #   SUPER_ADMIN  — full catalog (every AdminPermissionCode); all plants;
 #                  only global session (plant_id NULL) may create / deactivate plants
 #   PLANT_ADMIN  — own plant only; registration review + grant + PLANTS_MANAGE
-#                  + AUDIT_VIEW + EMPLOYEE_REVOKE (own plant)
+#                  + AUDIT_VIEW + AUTH_LOG_VIEW + EMPLOYEE_REVOKE (own plant)
 #   SUB_ADMIN    — reserved; defaults kept for future phase; grant API rejects in v1
 #
 # Dynamic RBAC UI (future): same tables; edit admin_role_permissions per role/admin.
@@ -88,6 +92,7 @@ ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCod
             # Own plant catalog read/update only — create/deactivate blocked in plant_catalog.
             AdminPermissionCode.PLANTS_MANAGE,
             AdminPermissionCode.AUDIT_VIEW,
+            AdminPermissionCode.AUTH_LOG_VIEW,
             AdminPermissionCode.EMPLOYEE_REVOKE,
         }
     ),
@@ -105,17 +110,23 @@ ADMIN_ROLE_DEFAULT_PERMISSIONS: dict[AdminRoleType, frozenset[AdminPermissionCod
 class AuditAction(StrEnum):
     """Actions written to ``audit_log.action`` (append-only).
 
-    Portal v1 default feed (category chips) — compliance decisions only:
+    Two portal surfaces share this table — never mix them in UI filters:
+
+    Compliance Audit (GET /admin/audit) — category chips only:
       approved      → APPROVE
       rejected      → REJECT
       admins        → ADMIN_GRANT, REVOKE
       kiosk         → ADMIN_KIOSK_ENROLL
       plants        → PLANT_CREATE, PLANT_UPDATE, PLANT_DEACTIVATE
       employees     → EMPLOYEE_REVOKE
+      ``all``       → union of the above only (never LOGIN / VIEW_IMAGE)
 
-    Stored but not in default portal feed (advanced / forensics later):
+    Auth Log (GET /admin/auth-log) — dedicated sidebar tab:
+      LOGIN only — high-volume kiosk authenticate attempts (text metadata).
+      Result + reason live in ``metadata`` (see AuthLogResult / AuthLogReasonCode).
+
+    Stored but not in either default portal list until a dedicated surface exists:
       VIEW_IMAGE — noisy PII access trail
-      LOGIN      — high volume auth noise
     """
 
     LOGIN = "LOGIN"
@@ -131,3 +142,61 @@ class AuditAction(StrEnum):
     PLANT_DEACTIVATE = "PLANT_DEACTIVATE"
     # Soft-revoke enrolled worker (INACTIVE + enrollment REVOKED).
     EMPLOYEE_REVOKE = "EMPLOYEE_REVOKE"
+
+
+class AuthLogResult(StrEnum):
+    """Outcome of one ``POST /authenticate`` attempt (Auth Log KPI + filters).
+
+    Written into ``audit_log.metadata.result`` on every LOGIN row.
+    HTTP layer may still return 200 with authenticated=false (FACE_MISMATCH) —
+    that is AuthLogResult.FAILURE for the dashboard.
+    """
+
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+
+
+class AuthLogReasonCode(StrEnum):
+    """Stable technical reason for one LOGIN row (text-only Auth Log).
+
+    Stored in ``audit_log.metadata.reason_code``. Portal shows a human label
+    derived from this code; never invent free-text reasons at write time.
+
+    Align values with ``AuthErrorCode`` where the failure originates there so
+    authentication.py can map 1:1. Extra codes cover the match decision path
+    that returns HTTP 200 (success and face mismatch).
+    """
+
+    # HTTP 200 — pipeline reached a 1:1 score decision
+    MATCH_OK = "MATCH_OK"
+    FACE_MISMATCH = "FACE_MISMATCH"
+
+    # Identity / enrollment gates (align with AuthErrorCode)
+    MISSING_EMPLOYEE_ID = "MISSING_EMPLOYEE_ID"
+    EMPLOYEE_NOT_FOUND = "EMPLOYEE_NOT_FOUND"
+    EMPLOYEE_INACTIVE = "EMPLOYEE_INACTIVE"
+    ENROLLMENT_NOT_FOUND = "ENROLLMENT_NOT_FOUND"
+
+    # Image / detect / embed gates (align with AuthErrorCode)
+    EMPTY_IMAGE = "EMPTY_IMAGE"
+    INVALID_IMAGE = "INVALID_IMAGE"
+    UNSUPPORTED_IMAGE_TYPE = "UNSUPPORTED_IMAGE_TYPE"
+    IMAGE_TOO_LARGE = "IMAGE_TOO_LARGE"
+    NO_FACE = "NO_FACE"
+    MULTIPLE_FACES = "MULTIPLE_FACES"
+    DETECT_FAILED = "DETECT_FAILED"
+    EMBED_FAILED = "EMBED_FAILED"
+    EMBEDDING_DIMENSION_MISMATCH = "EMBEDDING_DIMENSION_MISMATCH"
+
+    # Catch-all when the attempt failed but no tighter code applies
+    UNKNOWN = "UNKNOWN"
+
+
+# Metadata keys for LOGIN rows — keep writers/readers on the same contract.
+AUTH_LOG_METADATA_RESULT_KEY = "result"
+AUTH_LOG_METADATA_REASON_CODE_KEY = "reason_code"
+# Optional extras (text only; never face bytes / embeddings).
+AUTH_LOG_METADATA_SCORE_KEY = "score"
+AUTH_LOG_METADATA_THRESHOLD_KEY = "threshold"
+AUTH_LOG_METADATA_KIOSK_ID_KEY = "kiosk_id"
+AUTH_LOG_METADATA_MESSAGE_KEY = "message"

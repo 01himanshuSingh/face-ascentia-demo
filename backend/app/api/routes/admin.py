@@ -10,7 +10,8 @@ Plant catalog CRUD (``GET/POST/PATCH /admin/plants``) lives in ``admin_plants.py
 so registration-review and plant-catalog stay separate bounded contexts.
 
 Audit timeline (``GET /admin/audit``) lives in ``admin_audit.py`` — read-only,
-plant-scoped keyset feed (``AUDIT_VIEW``).
+plant-scoped feed (``AUDIT_VIEW``). Auth Log (``GET /admin/auth-log``) lives in
+``admin_auth_log.py`` — LOGIN attempts only (``AUTH_LOG_VIEW``); not an Audit chip.
 
 Plant workspace (pending queue + admin roster)
 ---------------------------------------------

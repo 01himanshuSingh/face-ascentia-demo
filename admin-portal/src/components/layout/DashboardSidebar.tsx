@@ -9,6 +9,7 @@ export type DashboardTab =
   | "plants"
   | "admins"
   | "audit"
+  | "authLog"
   | "employees";
 
 export type SidebarNavItem = {
@@ -111,6 +112,27 @@ function IconHistory({ className }: { className?: string }) {
   );
 }
 
+/** Kiosk face-login attempts — distinct from compliance Audit (IconHistory). */
+function IconAuthLog({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M7 21H5a2 2 0 0 1-2-2v-2M17 21h2a2 2 0 0 0 2-2v-2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d="M7.5 18.5c1.2-2 2.9-3 4.5-3s3.3 1 4.5 3"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function IconBuilding({ className }: { className?: string }) {
   return (
     <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -130,6 +152,8 @@ export const sidebarIcons = {
   employees: <IconUsers />,
   admins: <IconShield />,
   audit: <IconHistory />,
+  /** Dedicated Auth Log tab — LOGIN attempts only (AUTH_LOG_VIEW). */
+  authLog: <IconAuthLog />,
   plants: <IconBuilding />,
 };
 
