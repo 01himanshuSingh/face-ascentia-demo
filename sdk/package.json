@@ -1,6 +1,6 @@
 {
   "name": "@ascentia/face-auth-sdk",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Face authentication SDK for Mendix kiosk — camera, liveness, register, admin enroll.",
   "license": "UNLICENSED",
   "type": "module",

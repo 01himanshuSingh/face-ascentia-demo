@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ascentia/face-auth-sdk": "file:./vendor/ascentia-face-auth-sdk-0.1.3.tgz",
+    "@ascentia/face-auth-sdk": "file:./vendor/ascentia-face-auth-sdk-0.1.4.tgz",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

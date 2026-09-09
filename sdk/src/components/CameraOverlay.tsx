@@ -574,18 +574,36 @@ function resolveStatusLabel(
   }
 }
 
+/**
+ * Camera shell layout — portrait-first, responsive.
+ *
+ * Kiosk / phone (height > width): full-width stage, taller 3:4 frame so the
+ * face fills the glass clearly (replaces old square-ish 4:3 crop).
+ * Landscape laptop: max-height caps the stage; max-width shrinks with it so
+ * the preview stays a tall rectangle and chrome (Close / status) stays on-screen.
+ */
+const CAMERA_STAGE_MAX_HEIGHT = "min(74dvh, calc(100dvh - 9.5rem))";
+
 const styles: Record<string, CSSProperties> = {
-  root: overlayShellStyles.root,
+  root: {
+    ...overlayShellStyles.root,
+    alignItems: "center",
+    padding: "clamp(8px, 2.5vw, 16px)",
+  },
   panel: {
     ...overlayShellStyles.panel,
-    width: "min(720px, 100%)",
-    padding: 16,
+    // Width tracks the device; cap only so ultra-wide desktops stay readable.
+    width: "min(100%, 720px)",
+    maxHeight: "calc(100dvh - 16px)",
+    padding: "clamp(12px, 2.5vw, 16px)",
+    gap: 12,
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    flexShrink: 0,
   },
   title: {
     margin: 0,
@@ -604,7 +622,14 @@ const styles: Record<string, CSSProperties> = {
   stage: {
     position: "relative",
     width: "100%",
-    aspectRatio: "4 / 3",
+    // Taller than wide — kiosk / mobile face framing.
+    aspectRatio: "3 / 4",
+    maxHeight: CAMERA_STAGE_MAX_HEIGHT,
+    // When maxHeight binds (short landscape), shrink width to keep 3:4.
+    maxWidth: `min(100%, calc(${CAMERA_STAGE_MAX_HEIGHT} * 3 / 4))`,
+    marginLeft: "auto",
+    marginRight: "auto",
+    flex: "0 1 auto",
     background: "#000",
     borderRadius: 8,
     overflow: "hidden",
@@ -614,6 +639,7 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     height: "100%",
     objectFit: "cover",
+    objectPosition: "center center",
     transform: "scaleX(-1)",
   },
   banner: {
@@ -633,11 +659,13 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     fontSize: 15,
     color: BRAND_DERIVED.textMuted,
+    flexShrink: 0,
   },
   error: {
     margin: 0,
     textAlign: "center",
     fontSize: 14,
     color: "#b91c1c",
+    flexShrink: 0,
   },
 };
