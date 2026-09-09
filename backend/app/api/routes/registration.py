@@ -39,7 +39,8 @@ def get_registration_service() -> RegistrationService:
     status_code=status.HTTP_201_CREATED,
     summary="Submit employee self-registration (kiosk Path A)",
     description=(
-        "Registration-first kiosk intake: Plant + Employee ID + Full name + JPEG. "
+        "Registration-first kiosk intake: Plant + Employee ID + JPEG. "
+        "Full name is optional (defaults to Employee ID when omitted). "
         "No pre-existing HR row required. Creates PENDING registration_requests "
         "routed to the selected plant admin queue."
     ),
@@ -53,8 +54,8 @@ def get_registration_service() -> RegistrationService:
 async def register(
     employee_id: Annotated[str, Form(alias=REGISTER_EMPLOYEE_ID_FIELD)],
     plant_id: Annotated[str, Form(alias=REGISTER_PLANT_ID_FIELD)],
-    full_name: Annotated[str, Form(alias=REGISTER_FULL_NAME_FIELD)],
     image: Annotated[UploadFile, File(alias=REGISTER_IMAGE_FIELD)],
+    full_name: Annotated[str | None, Form(alias=REGISTER_FULL_NAME_FIELD)] = None,
     kiosk_id: Annotated[str | None, Form(alias=REGISTER_KIOSK_ID_FIELD)] = None,
     session_id: Annotated[str | None, Form(alias=REGISTER_SESSION_ID_FIELD)] = None,
     db: Session = Depends(get_db),
@@ -74,7 +75,7 @@ async def register(
         db,
         employee_id=employee_id,
         plant_id=plant_id,
-        full_name=full_name,
+        full_name=full_name or "",
         image_bytes=image_bytes,
         content_type=image.content_type,
         kiosk_id=kiosk_id,

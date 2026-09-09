@@ -103,10 +103,7 @@ export function PlantAdminsTable({
               className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-background/80"
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-text">
-                  {admin.fullName}
-                </p>
-                <p className="mt-0.5 font-mono text-xs text-text-muted">
+                <p className="truncate font-mono text-sm font-semibold text-text">
                   {admin.employeeId}
                 </p>
                 <p className="mt-1 text-xs text-text-muted">
@@ -132,7 +129,6 @@ export function PlantAdminsTable({
           <thead>
             <tr className="border-b border-border bg-background text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
               <th className="px-4 py-3">Employee ID</th>
-              <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Granted</th>
               <th className="px-4 py-3 text-right">Actions</th>
@@ -147,7 +143,6 @@ export function PlantAdminsTable({
                 <td className="px-4 py-3 font-medium text-text">
                   {admin.employeeId}
                 </td>
-                <td className="px-4 py-3 text-text">{admin.fullName}</td>
                 <td className="px-4 py-3">
                   <span className="inline-flex rounded-md bg-background px-2 py-0.5 text-xs font-medium text-text">
                     {admin.role.replace(/_/g, " ")}

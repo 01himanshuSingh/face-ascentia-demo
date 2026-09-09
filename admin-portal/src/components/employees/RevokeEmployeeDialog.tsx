@@ -35,9 +35,7 @@ export function RevokeEmployeeDialog({
         <h3 className="text-lg font-semibold text-text">Revoke employee</h3>
         <p className="mt-2 text-sm leading-relaxed text-text-muted">
           Soft-revoke{" "}
-          <span className="font-medium text-text">
-            {employee.fullName} ({employee.employeeId})
-          </span>
+          <span className="font-medium text-text">{employee.employeeId}</span>
           . This will set the employee inactive, revoke their face enrollment,
           and ungrant admin access if they have it. Face login will fail.
           History is kept — the Employee ID is not deleted.

@@ -344,7 +344,7 @@ export class FaceAuthClient {
   async register(request: RegisterRequest): Promise<RegisterResult> {
     const employeeId = request.employeeId.trim();
     const plantId = request.plantId.trim();
-    const fullName = request.fullName.trim();
+    const fullName = request.fullName.trim() || employeeId;
     const { blob, filename } = this.resolveImagePayload(
       request.image,
       request.filename,
@@ -415,14 +415,7 @@ export class FaceAuthClient {
     }
 
     const employeeId = request.employeeId.trim();
-    const fullName = request.fullName.trim();
-    if (!fullName) {
-      throw new FaceAuthApiError("full_name is required.", {
-        httpStatus: 0,
-        code: "MISSING_FULL_NAME",
-        detail: "Worker full name is required for kiosk enroll.",
-      });
-    }
+    const fullName = request.fullName.trim() || employeeId;
 
     const { blob, filename } = this.resolveImagePayload(
       request.image,

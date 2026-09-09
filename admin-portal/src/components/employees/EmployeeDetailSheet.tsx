@@ -91,13 +91,10 @@ export function EmployeeDetailSheet({
             <div className="min-w-0">
               <h3
                 id={titleId}
-                className="truncate text-base font-semibold leading-snug text-text"
+                className="truncate font-mono text-base font-semibold leading-snug text-text"
               >
-                {employee.fullName}
-              </h3>
-              <p className="mt-0.5 font-mono text-xs text-text-muted">
                 {employee.employeeId}
-              </p>
+              </h3>
             </div>
             <button
               type="button"
@@ -113,7 +110,6 @@ export function EmployeeDetailSheet({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <dl className="mt-1">
             <DetailRow label="Employee ID" value={employee.employeeId} />
-            <DetailRow label="Name" value={employee.fullName} />
             <DetailRow
               label="Status"
               value={isLeft ? "Left" : "Active"}

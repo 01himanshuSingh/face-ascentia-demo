@@ -150,9 +150,6 @@ export function RequestTable({
                         {formatCapturedAt(item.capturedAt)}
                       </p>
                     </div>
-                    <p className="mt-0.5 truncate text-sm text-text-muted">
-                      {item.submittedFullName}
-                    </p>
                     <p className="mt-1.5 inline-flex rounded-md bg-background/80 px-2 py-0.5 text-[0.7rem] font-medium text-text">
                       {item.plantCode ??
                         item.plantName ??

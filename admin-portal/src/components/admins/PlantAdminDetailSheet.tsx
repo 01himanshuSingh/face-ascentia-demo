@@ -84,13 +84,10 @@ export function PlantAdminDetailSheet({
             <div className="min-w-0">
               <h3
                 id={titleId}
-                className="truncate text-base font-semibold leading-snug text-text"
+                className="truncate font-mono text-base font-semibold leading-snug text-text"
               >
-                {admin.fullName}
-              </h3>
-              <p className="mt-0.5 font-mono text-xs text-text-muted">
                 {admin.employeeId}
-              </p>
+              </h3>
             </div>
             <button
               type="button"
@@ -106,7 +103,6 @@ export function PlantAdminDetailSheet({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <dl className="mt-1">
             <DetailRow label="Employee ID" value={admin.employeeId} />
-            <DetailRow label="Name" value={admin.fullName} />
             <DetailRow
               label="Role"
               value={admin.role.replace(/_/g, " ")}

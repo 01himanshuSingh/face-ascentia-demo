@@ -19,15 +19,13 @@ export function buildAutoDecisionReason(
   action: "approved" | "rejected",
   reviewerEmployeeId: string,
   employeeId: string,
-  fullName: string,
 ): string {
   const reviewer = reviewerEmployeeId.trim() || "ADMIN";
   const id = employeeId.trim() || "UNKNOWN";
-  const name = fullName.trim() || id;
   if (action === "approved") {
-    return `Approved by ${reviewer}: ${id} (${name})`;
+    return `Approved by ${reviewer}: ${id}`;
   }
-  return `Rejected by ${reviewer}: ${id} (${name})`;
+  return `Rejected by ${reviewer}: ${id}`;
 }
 
 export function RequestDetails({
@@ -75,7 +73,6 @@ export function RequestDetails({
       "approved",
       reviewerEmployeeId,
       item.employeeId,
-      item.submittedFullName,
     );
     void onApprove(reason);
   };
@@ -85,7 +82,6 @@ export function RequestDetails({
       "rejected",
       reviewerEmployeeId,
       item.employeeId,
-      item.submittedFullName,
     );
     void onReject(reason);
   };
@@ -135,19 +131,13 @@ export function RequestDetails({
         </div>
         <div className="rounded-2xl bg-white/50 px-3.5 py-3">
           <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
-            Full name
-          </dt>
-          <dd className="mt-1 text-sm font-medium text-text">{item.submittedFullName}</dd>
-        </div>
-        <div className="rounded-2xl bg-white/50 px-3.5 py-3">
-          <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
             Plant
           </dt>
           <dd className="mt-1 text-sm text-text">
             {item.plantCode ?? item.plantName ?? item.plantId}
           </dd>
         </div>
-        <div className="rounded-2xl bg-white/50 px-3.5 py-3">
+        <div className="rounded-2xl bg-white/50 px-3.5 py-3 sm:col-span-2">
           <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
             Submitted
           </dt>

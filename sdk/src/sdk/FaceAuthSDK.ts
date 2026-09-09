@@ -316,10 +316,10 @@ export class FaceAuthSDK {
   ): Promise<RegisterResult> {
     const normalizedId = payload.employeeId.trim();
     const plantId = payload.plantId.trim();
-    const fullName = payload.fullName.trim();
-    if (!normalizedId || !plantId || !fullName) {
+    const fullName = payload.fullName.trim() || normalizedId;
+    if (!normalizedId || !plantId) {
       throw new Error(
-        "FaceAuthSDK.register() requires employeeId, plantId, and fullName.",
+        "FaceAuthSDK.register() requires employeeId and plantId.",
       );
     }
 
@@ -353,7 +353,7 @@ export class FaceAuthSDK {
   }
 
   /**
-   * Path A register overlay — Plant + Employee ID + Full name.
+   * Path A register overlay — Plant + Employee ID (name derived from Employee ID).
    */
   async promptRegisterAndSubmit(defaultEmployeeId: string): Promise<RegisterResult> {
     if (!this.lastCapture) {
@@ -616,7 +616,7 @@ export class FaceAuthSDK {
     }
 
     const targetEmployeeId = payload.employeeId.trim();
-    const fullName = payload.fullName.trim();
+    const fullName = payload.fullName.trim() || targetEmployeeId;
 
     this.adminEnrollTargetId = targetEmployeeId;
     this.adminEnrollBusy = true;

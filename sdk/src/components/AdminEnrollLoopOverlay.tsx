@@ -40,26 +40,24 @@ export function AdminEnrollLoopOverlay({
   onEndSession,
 }: AdminEnrollLoopOverlayProps): ReactElement | null {
   const [targetEmployeeId, setTargetEmployeeId] = useState("");
-  const [fullName, setFullName] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   if (!open) {
     return null;
   }
 
-  const canEnroll =
-    targetEmployeeId.trim().length > 0 &&
-    fullName.trim().length > 0 &&
-    !busy;
+  const canEnroll = targetEmployeeId.trim().length > 0 && !busy;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (!canEnroll) {
       return;
     }
+    const id = targetEmployeeId.trim();
     onEnrollNext({
-      employeeId: targetEmployeeId.trim(),
-      fullName: fullName.trim(),
+      employeeId: id,
+      // Client policy: no name at kiosk — reuse Employee ID for DB full_name.
+      fullName: id,
     });
   };
 
@@ -87,8 +85,8 @@ export function AdminEnrollLoopOverlay({
         </header>
 
         <p style={styles.subtitle}>
-          Enter the worker Employee ID and full name, then capture a fresh face
-          photo. Each enrollment is active immediately under your plant scope.
+          Enter the worker Employee ID, then capture a fresh face photo. Each
+          enrollment is active immediately under your plant scope.
         </p>
 
         <div style={styles.contextCard} aria-label="Admin session context">
@@ -125,25 +123,6 @@ export function AdminEnrollLoopOverlay({
               onChange={(event) => setTargetEmployeeId(event.target.value)}
               placeholder="Employee ID"
               autoComplete="off"
-              required
-            />
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label} htmlFor="face-auth-enroll-full-name">
-              Full name
-            </label>
-            <input
-              id="face-auth-enroll-full-name"
-              type="text"
-              value={fullName}
-              disabled={busy}
-              style={inputStyle("fullName")}
-              onFocus={() => setFocusedField("fullName")}
-              onBlur={() => setFocusedField(null)}
-              onChange={(event) => setFullName(event.target.value)}
-              placeholder="Full name"
-              autoComplete="name"
               required
             />
           </div>

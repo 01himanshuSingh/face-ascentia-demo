@@ -20,7 +20,6 @@ from app.common.exceptions import (
     RegistrationEmployeeInactiveError,
     RegistrationError,
     RegistrationMissingEmployeeIdError,
-    RegistrationMissingFullNameError,
     RegistrationMissingPlantIdError,
     RegistrationPlantMismatchError,
     RegistrationPlantNotFoundError,
@@ -83,7 +82,8 @@ class RegistrationService:
         session_id: str | None = None,
     ) -> RegisterResponse:
         normalized_id = self._normalize_employee_id(employee_id)
-        normalized_name = self._normalize_full_name(full_name)
+        # Kiosk no longer collects name — blank/missing → reuse Employee ID.
+        normalized_name = self._normalize_full_name(full_name, normalized_id)
         resolved_plant_id = self._resolve_plant_id(plant_id)
         self._validate_content_type(content_type)
 
@@ -170,11 +170,12 @@ class RegistrationService:
         return normalized
 
     @staticmethod
-    def _normalize_full_name(full_name: str) -> str:
+    def _normalize_full_name(full_name: str | None, employee_id: str) -> str:
         normalized = (full_name or "").strip()
-        if not normalized:
-            raise RegistrationMissingFullNameError()
-        return normalized
+        if normalized:
+            return normalized
+        # Safe placeholder so employees.full_name / submitted_full_name stay NOT NULL.
+        return employee_id
 
     @staticmethod
     def _resolve_plant_id(plant_id: uuid.UUID | str) -> uuid.UUID:

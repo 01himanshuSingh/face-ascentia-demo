@@ -31,9 +31,7 @@ export function RevokeAdminDialog({
         <h3 className="text-lg font-semibold text-text">Ungrant plant admin</h3>
         <p className="mt-2 text-sm leading-relaxed text-text-muted">
           Remove admin portal access for{" "}
-          <span className="font-medium text-text">
-            {admin.fullName} ({admin.employeeId})
-          </span>
+          <span className="font-medium text-text">{admin.employeeId}</span>
           . They remain an employee — face login is unchanged.
         </p>
 

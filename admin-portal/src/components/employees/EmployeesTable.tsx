@@ -97,10 +97,7 @@ export function EmployeesTable({
               className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-background/80"
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-text">
-                  {employee.fullName}
-                </p>
-                <p className="mt-0.5 font-mono text-xs text-text-muted">
+                <p className="truncate font-mono text-sm font-semibold text-text">
                   {employee.employeeId}
                 </p>
                 <p className="mt-1 text-xs text-text-muted">
@@ -130,7 +127,6 @@ export function EmployeesTable({
           <thead className="border-b border-border bg-background text-xs font-semibold uppercase tracking-wide text-text-muted">
             <tr>
               <th className="px-4 py-3 font-semibold">Employee ID</th>
-              <th className="px-4 py-3 font-semibold">Name</th>
               {isLeft ? (
                 <>
                   <th className="px-4 py-3 font-semibold">Left</th>
@@ -153,7 +149,6 @@ export function EmployeesTable({
                 <td className="px-4 py-3 font-medium text-text">
                   {employee.employeeId}
                 </td>
-                <td className="px-4 py-3 text-text">{employee.fullName}</td>
                 {isLeft ? (
                   <>
                     <td className="whitespace-nowrap px-4 py-3 text-text-muted">

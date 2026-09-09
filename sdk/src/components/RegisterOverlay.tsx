@@ -24,23 +24,23 @@ export interface RegisterOverlayProps {
 }
 
 /**
- * Registration-first Path A — Plant + Employee ID + Full name (no camera).
+ * Registration-first Path A — Plant + Employee ID (no camera).
+ * Full name is not collected at kiosk; SDK sends Employee ID as display name.
  * Face JPEG is reused from the prior authenticate capture.
  */
 export function RegisterOverlay({
   open,
   plants,
   defaultEmployeeId = "",
-  defaultFullName = "",
+  defaultFullName: _defaultFullName = "",
   defaultPlantId = "",
-  subtitle = "Complete your details after successful face capture.",
+  subtitle = "Select your plant and Employee ID after successful face capture.",
   busy = false,
   errorMessage = null,
   onSubmit,
   onCancel,
 }: RegisterOverlayProps): ReactElement | null {
   const [employeeId, setEmployeeId] = useState(defaultEmployeeId);
-  const [fullName, setFullName] = useState(defaultFullName);
   const [plantId, setPlantId] = useState(defaultPlantId);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
@@ -50,7 +50,6 @@ export function RegisterOverlay({
 
   const canSubmit =
     employeeId.trim().length > 0 &&
-    fullName.trim().length > 0 &&
     plantId.trim().length > 0 &&
     !busy;
 
@@ -59,10 +58,12 @@ export function RegisterOverlay({
     if (!canSubmit) {
       return;
     }
+    const id = employeeId.trim();
     onSubmit({
-      employeeId: employeeId.trim(),
+      employeeId: id,
       plantId: plantId.trim(),
-      fullName: fullName.trim(),
+      // Client policy: no name at kiosk — reuse Employee ID for DB full_name.
+      fullName: id,
     });
   };
 
@@ -130,25 +131,6 @@ export function RegisterOverlay({
               onBlur={() => setFocusedField(null)}
               placeholder="Employee ID"
               autoComplete="off"
-              disabled={busy}
-              required
-            />
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label} htmlFor="face-auth-register-full-name">
-              Full Name
-            </label>
-            <input
-              id="face-auth-register-full-name"
-              style={inputStyle("fullName")}
-              type="text"
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              onFocus={() => setFocusedField("fullName")}
-              onBlur={() => setFocusedField(null)}
-              placeholder="Full name"
-              autoComplete="name"
               disabled={busy}
               required
             />

@@ -113,8 +113,11 @@ def kiosk_admin_login(
 )
 async def kiosk_admin_enroll(
     employee_id: Annotated[str, Form(alias=KIOSK_ADMIN_ENROLL_EMPLOYEE_ID_FIELD)],
-    full_name: Annotated[str, Form(alias=KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD)],
     image: Annotated[UploadFile, File(alias=KIOSK_ADMIN_ENROLL_IMAGE_FIELD)],
+    full_name: Annotated[
+        str | None,
+        Form(alias=KIOSK_ADMIN_ENROLL_FULL_NAME_FIELD),
+    ] = None,
     kiosk_id: Annotated[
         str | None,
         Form(alias=KIOSK_ADMIN_ENROLL_KIOSK_ID_FIELD),
@@ -140,7 +143,7 @@ async def kiosk_admin_enroll(
         db,
         session,
         employee_id=employee_id,
-        full_name=full_name,
+        full_name=full_name or "",
         image_bytes=image_bytes,
         content_type=image.content_type,
         kiosk_id=kiosk_id,

@@ -71,7 +71,6 @@ export function AuditEventDialog({
 
   const showFace = allowFace && canShowFace(item.action) && Boolean(item.targetId);
   const employeeId = metaString(item.metadata, "employee_id");
-  const fullName = metaString(item.metadata, "submitted_full_name");
   const reason = metaString(item.metadata, "reason");
   const imageDeleted = item.metadata?.image_deleted === true;
 
@@ -149,7 +148,6 @@ export function AuditEventDialog({
         {employeeId ? (
           <DetailRow label="Employee ID" value={employeeId} />
         ) : null}
-        {fullName ? <DetailRow label="Name" value={fullName} /> : null}
         {reason ? <DetailRow label="Reason" value={reason} /> : null}
         {item.action === "REJECT" && imageDeleted ? (
           <p className="pt-2 text-xs text-text-muted">

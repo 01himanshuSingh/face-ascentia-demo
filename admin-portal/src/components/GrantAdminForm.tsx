@@ -133,7 +133,7 @@ export function GrantAdminForm({
 
         {previewMatches && !previewError ? (
           <div className="rounded-xl border border-border/80 bg-background/80 px-4 py-3 text-sm">
-            <p className="font-medium text-text">{preview.fullName}</p>
+            <p className="font-mono font-medium text-text">{preview.employeeId}</p>
             <p className="mt-1 text-text-muted">
               Plant: {preview.plantName} ({preview.plantCode})
             </p>

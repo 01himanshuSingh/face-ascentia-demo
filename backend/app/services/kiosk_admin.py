@@ -205,7 +205,7 @@ class KioskAdminService:
         assert_permission(session, AdminPermissionCode.REGISTRATION_APPROVE)
 
         normalized_id = self._normalize_target_employee_id(employee_id)
-        submitted_name = self._normalize_full_name(full_name)
+        submitted_name = self._normalize_full_name(full_name, normalized_id)
         self._validate_image_payload(image_bytes, content_type)
         self._assert_worker_eligible(
             db,
@@ -349,15 +349,11 @@ class KioskAdminService:
         return normalized
 
     @staticmethod
-    def _normalize_full_name(full_name: str) -> str:
+    def _normalize_full_name(full_name: str | None, employee_id: str) -> str:
         normalized = (full_name or "").strip()
-        if not normalized:
-            raise KioskAdminError(
-                "full_name is required.",
-                code=KioskAdminErrorCode.MISSING_FULL_NAME,
-                http_status=400,
-            )
-        return normalized
+        if normalized:
+            return normalized
+        return employee_id
 
     def _assert_worker_eligible(
         self,
