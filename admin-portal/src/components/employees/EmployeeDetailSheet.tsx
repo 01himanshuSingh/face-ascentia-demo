@@ -5,6 +5,7 @@ import {
   type AdminEmployeeItem,
   type EmployeeListStatus,
 } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -112,12 +113,12 @@ export function EmployeeDetailSheet({
             <DetailRow label="Employee ID" value={employee.employeeId} />
             <DetailRow
               label="Status"
-              value={isLeft ? "Left" : "Active"}
+              value={isLeft ? "Inactive" : "Active"}
             />
             {isLeft ? (
               <>
                 <DetailRow
-                  label="Left"
+                  label="Inactive since"
                   value={
                     employee.leftAt
                       ? formatCapturedAt(employee.leftAt)
@@ -143,14 +144,16 @@ export function EmployeeDetailSheet({
 
           {!isLeft ? (
             <div className="mt-5 pb-2">
-              <button
+              <LoadingButton
                 type="button"
-                disabled={busy}
+                loading={busy}
+                loadingLabel="Opening…"
+                spinnerTone="danger"
                 onClick={() => onRevoke(employee)}
-                className="flex min-h-11 w-full items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                className="min-h-11 w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"
               >
                 Revoke employee
-              </button>
+              </LoadingButton>
               <p className="mt-2 text-xs leading-relaxed text-text-muted">
                 Stops face login and removes admin if any. Employee ID is kept
                 for history.

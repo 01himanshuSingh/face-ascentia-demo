@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import type { AdminEmployeeItem } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 export type RevokeEmployeeDialogProps = {
   employee: AdminEmployeeItem;
@@ -63,13 +64,16 @@ export function RevokeEmployeeDialog({
           >
             Cancel
           </button>
-          <button
+          <LoadingButton
             type="submit"
-            disabled={busy || !reason.trim()}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+            loading={busy}
+            loadingLabel="Revoking…"
+            spinnerTone="light"
+            disabled={!reason.trim()}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
           >
-            {busy ? "Revoking…" : "Revoke"}
-          </button>
+            Revoke
+          </LoadingButton>
         </div>
       </form>
     </div>

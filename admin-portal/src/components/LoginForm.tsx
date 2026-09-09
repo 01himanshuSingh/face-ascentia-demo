@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { BrandLogo } from "./BrandLogo";
+import { LoadingButton } from "./ui/LoadingButton";
 
 export type LoginFormProps = {
   busy: boolean;
@@ -77,13 +78,14 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
             </p>
           ) : null}
 
-          <button
+          <LoadingButton
             type="submit"
-            disabled={busy}
-            className="mt-1 flex h-11 w-full items-center justify-center rounded-lg bg-primary text-sm font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            loading={busy}
+            loadingLabel="Signing in…"
+            className="mt-1 h-11 w-full rounded-lg bg-primary text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
           >
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
+            Sign in
+          </LoadingButton>
         </form>
       </div>
     </div>

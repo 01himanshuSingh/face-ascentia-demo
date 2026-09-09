@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import type { AdminGrantPayload, AdminGrantPreview } from "../api/adminApi";
+import { ButtonSpinner, LoadingButton } from "./ui/LoadingButton";
 
 export type GrantAdminFormProps = {
   preview: AdminGrantPreview | null;
@@ -117,10 +118,7 @@ export function GrantAdminForm({
 
         {previewLoading ? (
           <p className="flex items-center gap-2 text-sm text-text-muted" aria-live="polite">
-            <span
-              className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"
-              aria-hidden
-            />
+            <ButtonSpinner tone="dark" className="h-3.5 w-3.5" />
             Looking up employee…
           </p>
         ) : null}
@@ -180,24 +178,15 @@ export function GrantAdminForm({
           ) : null}
         </label>
 
-        <button
+        <LoadingButton
           type="submit"
-          disabled={!canSubmit}
-          aria-busy={busy}
-          className="mt-1 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+          loading={busy}
+          loadingLabel="Granting…"
+          disabled={!canSubmit && !busy}
+          className="mt-1 min-h-11 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
-          {busy ? (
-            <>
-              <span
-                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
-                aria-hidden
-              />
-              Granting…
-            </>
-          ) : (
-            "Grant PLANT_ADMIN"
-          )}
-        </button>
+          Grant PLANT_ADMIN
+        </LoadingButton>
       </form>
     </div>
   );

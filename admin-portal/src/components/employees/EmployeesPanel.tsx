@@ -28,7 +28,7 @@ export type EmployeesPanelProps = {
 
 const ROSTER_TABS: { id: EmployeeListStatus; label: string }[] = [
   { id: "active", label: "Active" },
-  { id: "inactive", label: "Left" },
+  { id: "inactive", label: "Inactive" },
 ];
 
 export function EmployeesPanel({
@@ -72,7 +72,7 @@ export function EmployeesPanel({
           <h2 className="text-lg font-semibold text-text">Employees</h2>
           <p className="mt-1 text-sm leading-relaxed text-text-muted">
             {isLeft
-              ? "Workers who left or were revoked"
+              ? "Inactive / revoked workers"
               : "Active enrolled workers"}
             {workspaceLabel ? (
               <>

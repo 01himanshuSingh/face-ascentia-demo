@@ -5,6 +5,7 @@ import type {
   PlantCreatePayload,
   PlantUpdatePayload,
 } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 export type PlantFormDialogProps = {
   open: boolean;
@@ -126,13 +127,15 @@ export function PlantFormDialog({
             >
               Cancel
             </button>
-            <button
+            <LoadingButton
               type="submit"
-              disabled={!canSubmit}
-              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-60"
+              loading={busy}
+              loadingLabel="Saving…"
+              disabled={!canSubmit && !busy}
+              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-white hover:opacity-95"
             >
-              {busy ? "Saving…" : mode === "create" ? "Create" : "Save"}
-            </button>
+              {mode === "create" ? "Create" : "Save"}
+            </LoadingButton>
           </div>
         </form>
       </div>

@@ -252,6 +252,8 @@ export function useRegistrationQueue({
     imageUrl: imageQuery.data ?? null,
     imageLoading: imageQuery.isLoading || imageQuery.isFetching,
     decisionBusy,
+    approving: approveMutation.isPending,
+    rejecting: rejectMutation.isPending,
     statusMessage,
     refresh,
     approve,

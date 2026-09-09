@@ -3,6 +3,7 @@ import {
   type AdminEmployeeItem,
   type EmployeeListStatus,
 } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 export type EmployeesTableProps = {
   employees: AdminEmployeeItem[];
@@ -46,7 +47,7 @@ export function EmployeesTable({
     return (
       <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         {isLeft
-          ? "No left workers in this plant yet. Revoke an active employee to see them here."
+          ? "No inactive workers in this plant yet. Revoke an active employee to see them here."
           : "No active enrolled workers in this plant. Approve a registration or enroll via kiosk first."}
       </div>
     );
@@ -103,8 +104,8 @@ export function EmployeesTable({
                 <p className="mt-1 text-xs text-text-muted">
                   {isLeft
                     ? employee.leftAt
-                      ? `Left ${formatCapturedAt(employee.leftAt)}`
-                      : "Left"
+                      ? `Inactive ${formatCapturedAt(employee.leftAt)}`
+                      : "Inactive"
                     : employee.enrolledAt
                       ? `Enrolled ${formatCapturedAt(employee.enrolledAt)}`
                       : "Enrolled"}
@@ -129,7 +130,7 @@ export function EmployeesTable({
               <th className="px-4 py-3 font-semibold">Employee ID</th>
               {isLeft ? (
                 <>
-                  <th className="px-4 py-3 font-semibold">Left</th>
+                  <th className="px-4 py-3 font-semibold">Inactive</th>
                   <th className="px-4 py-3 font-semibold">Reason</th>
                 </>
               ) : (
@@ -168,14 +169,16 @@ export function EmployeesTable({
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <button
+                      <LoadingButton
                         type="button"
-                        disabled={busy}
+                        loading={busy}
+                        loadingLabel="…"
+                        spinnerTone="danger"
                         onClick={() => onRevoke(employee)}
-                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
                       >
                         Revoke
-                      </button>
+                      </LoadingButton>
                     </td>
                   </>
                 )}

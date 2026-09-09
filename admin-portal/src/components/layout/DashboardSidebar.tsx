@@ -1,5 +1,12 @@
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { BrandLogo } from "../BrandLogo";
 
@@ -18,8 +25,18 @@ export type SidebarNavItem = {
   icon: ReactNode;
 };
 
+/** Enrollment vs Auth — shown under a single Audit Log sidebar button. */
+export type AuditMenuOption = {
+  id: "audit" | "authLog";
+  label: string;
+  description: string;
+  icon: ReactNode;
+};
+
 export type DashboardSidebarProps = {
   items: SidebarNavItem[];
+  /** When non-empty, render one Audit Log control with these two destinations. */
+  auditMenuOptions?: AuditMenuOption[];
   activeTab: DashboardTab;
   employeeId: string;
   roleLabel: string;
@@ -112,7 +129,6 @@ function IconHistory({ className }: { className?: string }) {
   );
 }
 
-/** Kiosk face-login attempts — distinct from compliance Audit (IconHistory). */
 function IconAuthLog({ className }: { className?: string }) {
   return (
     <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -152,13 +168,249 @@ export const sidebarIcons = {
   employees: <IconUsers />,
   admins: <IconShield />,
   audit: <IconHistory />,
-  /** Dedicated Auth Log tab — LOGIN attempts only (AUTH_LOG_VIEW). */
   authLog: <IconAuthLog />,
   plants: <IconBuilding />,
 };
 
+function isAuditSectionTab(tab: DashboardTab): boolean {
+  return tab === "audit" || tab === "authLog";
+}
+
+type AuditLogNavProps = {
+  options: AuditMenuOption[];
+  activeTab: DashboardTab;
+  onNavigate: (tab: DashboardTab) => void;
+  onCloseMobile: () => void;
+};
+
+/**
+ * Single Audit Log control:
+ * - Desktop: click → flyout to the RIGHT via portal (above dashboard UI)
+ * - Mobile: click → accordion dropdown inside the sidebar
+ */
+function AuditLogNav({
+  options,
+  activeTab,
+  onNavigate,
+  onCloseMobile,
+}: AuditLogNavProps) {
+  const [open, setOpen] = useState(false);
+  const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(
+    null,
+  );
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  const parentActive = isAuditSectionTab(activeTab);
+
+  const updateFlyoutPosition = () => {
+    const button = buttonRef.current;
+    if (!button) {
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    const gap = 12;
+    const estimatedHeight = 96;
+    const maxTop = window.innerHeight - estimatedHeight / 2 - 12;
+    const minTop = estimatedHeight / 2 + 12;
+    const top = Math.min(maxTop, Math.max(minTop, rect.top + rect.height / 2));
+    const left = Math.min(window.innerWidth - 220, rect.right + gap);
+    setFlyoutPos({ top, left });
+  };
+
+  useEffect(() => {
+    if (!open) {
+      setFlyoutPos(null);
+      return;
+    }
+    updateFlyoutPosition();
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      const inTrigger = rootRef.current?.contains(target);
+      const inFlyout = flyoutRef.current?.contains(target);
+      if (!inTrigger && !inFlyout) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    const onReposition = () => updateFlyoutPosition();
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open]);
+
+  // Mobile accordion stays open while on either audit screen.
+  useEffect(() => {
+    if (
+      parentActive &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      setOpen(true);
+    }
+  }, [parentActive]);
+
+  const choose = (tab: "audit" | "authLog") => {
+    onNavigate(tab);
+    setOpen(false);
+    onCloseMobile();
+  };
+
+  const desktopFlyout =
+    open && flyoutPos && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={flyoutRef}
+            id={`${panelId}-desktop`}
+            role="menu"
+            aria-label="Audit log types"
+            className="pointer-events-auto fixed z-[200] hidden -translate-y-1/2 lg:block"
+            style={{ top: flyoutPos.top, left: flyoutPos.left }}
+          >
+            <span
+              className="absolute top-1/2 -left-1.5 z-0 h-3 w-3 -translate-y-1/2 rotate-45 bg-[#0B2F1C]"
+              aria-hidden
+            />
+            <div className="relative z-10 min-w-[12.75rem] max-w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-[#0B2F1C] py-1.5 shadow-[0_16px_48px_rgba(15,23,42,0.35)] ring-1 ring-white/10">
+              <ul className="flex flex-col">
+                {options.map((option) => {
+                  const selected = activeTab === option.id;
+                  return (
+                    <li key={option.id}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => choose(option.id)}
+                        className={clsx(
+                          "flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition",
+                          selected
+                            ? "bg-white/12 text-white"
+                            : "text-white/90 hover:bg-white/10 hover:text-white",
+                        )}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#A8C5B6]"
+                          aria-hidden
+                        />
+                        {option.label}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-haspopup="menu"
+        onClick={() => setOpen((value) => !value)}
+        className={clsx(
+          "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
+          parentActive || open
+            ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
+            : "text-text-muted hover:bg-white/60 hover:text-text",
+        )}
+      >
+        <span
+          className={clsx(
+            "shrink-0",
+            parentActive || open ? "text-primary" : "text-text-muted",
+          )}
+        >
+          {sidebarIcons.audit}
+        </span>
+        <span className="min-w-0 flex-1 truncate">Audit Log</span>
+        <span
+          className={clsx(
+            "shrink-0 text-current transition-transform duration-200 lg:rotate-0",
+            open && "max-lg:rotate-90",
+          )}
+          aria-hidden
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M9 6l6 6-6 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+
+      {/* Mobile: accordion inside sidebar */}
+      {open ? (
+        <div
+          id={panelId}
+          className="mt-1 overflow-hidden rounded-xl border border-border/70 bg-white/95 lg:hidden"
+          role="menu"
+          aria-label="Audit log types"
+        >
+          <ul className="flex flex-col py-1">
+            {options.map((option) => {
+              const selected = activeTab === option.id;
+              return (
+                <li key={option.id}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => choose(option.id)}
+                    className={clsx(
+                      "flex w-full items-center gap-3 px-3.5 py-3 text-left text-sm font-semibold transition",
+                      selected
+                        ? "bg-primary/10 text-primary"
+                        : "text-text hover:bg-background",
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        selected ? "bg-primary" : "bg-text-muted/50",
+                      )}
+                      aria-hidden
+                    />
+                    {option.label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {desktopFlyout}
+    </div>
+  );
+}
+
 export function DashboardSidebar({
   items,
+  auditMenuOptions = [],
   activeTab,
   employeeId,
   roleLabel,
@@ -168,6 +420,10 @@ export function DashboardSidebar({
   onCloseMobile,
   onSignOut,
 }: DashboardSidebarProps) {
+  const showAuditMenu = auditMenuOptions.length > 0;
+  const mainItems = items.filter((item) => item.id !== "plants");
+  const plantItem = items.find((item) => item.id === "plants");
+
   return (
     <>
       {mobileOpen ? (
@@ -192,8 +448,11 @@ export function DashboardSidebar({
           </p>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4" aria-label="Admin sections">
-          {items.map((item) => {
+        <nav
+          className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4"
+          aria-label="Admin sections"
+        >
+          {mainItems.map((item) => {
             const active = activeTab === item.id;
             return (
               <button
@@ -210,13 +469,55 @@ export function DashboardSidebar({
                     : "text-text-muted hover:bg-white/60 hover:text-text",
                 )}
               >
-                <span className={clsx("shrink-0", active ? "text-primary" : "text-text-muted")}>
+                <span
+                  className={clsx(
+                    "shrink-0",
+                    active ? "text-primary" : "text-text-muted",
+                  )}
+                >
                   {item.icon}
                 </span>
                 {item.label}
               </button>
             );
           })}
+
+          {showAuditMenu ? (
+            <AuditLogNav
+              options={auditMenuOptions}
+              activeTab={activeTab}
+              onNavigate={onNavigate}
+              onCloseMobile={onCloseMobile}
+            />
+          ) : null}
+
+          {plantItem ? (
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate(plantItem.id);
+                onCloseMobile();
+              }}
+              className={clsx(
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
+                activeTab === plantItem.id
+                  ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
+                  : "text-text-muted hover:bg-white/60 hover:text-text",
+              )}
+            >
+              <span
+                className={clsx(
+                  "shrink-0",
+                  activeTab === plantItem.id
+                    ? "text-primary"
+                    : "text-text-muted",
+                )}
+              >
+                {plantItem.icon}
+              </span>
+              {plantItem.label}
+            </button>
+          ) : null}
         </nav>
 
         <div className="border-t border-white/50 px-4 py-4">

@@ -4,6 +4,7 @@ import {
   formatCapturedAt,
   type AdminPlantItem,
 } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 export type PlantCatalogTableProps = {
   plants: AdminPlantItem[];
@@ -101,19 +102,21 @@ export function PlantCatalogTable({
                       Edit
                     </button>
                     {allowDeactivate ? (
-                      <button
+                      <LoadingButton
                         type="button"
-                        disabled={busy}
+                        loading={busy}
+                        loadingLabel="…"
+                        spinnerTone={plant.isActive ? "danger" : "dark"}
                         onClick={() => onToggleActive(plant)}
                         className={clsx(
-                          "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60",
+                          "rounded-lg border px-2.5 py-1.5 text-xs font-medium",
                           plant.isActive
                             ? "border-red-200 bg-white text-red-700 hover:bg-red-50"
                             : "border-brand-100 bg-white text-brand-800 hover:bg-brand-50",
                         )}
                       >
                         {plant.isActive ? "Deactivate" : "Reactivate"}
-                      </button>
+                      </LoadingButton>
                     ) : null}
                   </div>
                 </td>

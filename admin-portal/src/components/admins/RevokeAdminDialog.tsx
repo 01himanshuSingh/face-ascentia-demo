@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import type { AdminUserItem } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 export type RevokeAdminDialogProps = {
   admin: AdminUserItem;
@@ -56,13 +57,14 @@ export function RevokeAdminDialog({
           >
             Cancel
           </button>
-          <button
+          <LoadingButton
             type="submit"
-            disabled={busy}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+            loading={busy}
+            loadingLabel="Ungranting…"
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
           >
-            {busy ? "Ungranting…" : "Ungrant"}
-          </button>
+            Ungrant
+          </LoadingButton>
         </div>
       </form>
     </div>

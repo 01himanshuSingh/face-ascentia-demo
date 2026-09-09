@@ -1,4 +1,5 @@
 import { formatCapturedAt, type AdminUserItem } from "../../api/adminApi";
+import { LoadingButton } from "../ui/LoadingButton";
 
 export type PlantAdminsTableProps = {
   admins: AdminUserItem[];
@@ -157,14 +158,17 @@ export function PlantAdminsTable({
                   ) : null}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
+                  <LoadingButton
                     type="button"
-                    disabled={busy || loading}
+                    loading={busy}
+                    loadingLabel="…"
+                    spinnerTone="danger"
+                    disabled={loading}
                     onClick={() => onRevoke(admin)}
-                    className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                    className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
                   >
                     Ungrant
-                  </button>
+                  </LoadingButton>
                 </td>
               </tr>
             ))}

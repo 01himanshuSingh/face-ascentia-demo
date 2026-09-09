@@ -38,6 +38,7 @@ import { GrantAdminForm } from "./components/GrantAdminForm";
 import {
   DashboardSidebar,
   sidebarIcons,
+  type AuditMenuOption,
   type DashboardTab,
   type SidebarNavItem,
 } from "./components/layout/DashboardSidebar";
@@ -46,6 +47,7 @@ import { PlantWorkspaceSelector } from "./components/PlantWorkspaceSelector";
 import { PlantCatalogPanel } from "./components/plants/PlantCatalogPanel";
 import { RequestDetails } from "./components/RequestDetails";
 import { RequestTable } from "./components/RequestTable";
+import { LoadingButton } from "./components/ui/LoadingButton";
 import { useAdminSession } from "./hooks/useAdminSession";
 import { useAuditLog } from "./hooks/useAuditLog";
 import { useAuthLog } from "./hooks/useAuthLog";
@@ -77,10 +79,10 @@ function tabTitle(tab: DashboardTab): string {
     return "Plant admins";
   }
   if (tab === "audit") {
-    return "Audit log";
+    return "Enrollment audit";
   }
   if (tab === "authLog") {
-    return "Auth log";
+    return "Auth audit";
   }
   if (tab === "employees") {
     return "Employees";
@@ -99,13 +101,13 @@ function tabSubtitle(tab: DashboardTab): string {
     return "Review plant admins and soft-ungrant when needed.";
   }
   if (tab === "audit") {
-    return "Plant actions for the last 7 days. Open a row for details.";
+    return "Registration and admin actions for this plant. Open a row for details.";
   }
   if (tab === "authLog") {
     return "Kiosk face login success and failure for today. Match % when scored.";
   }
   if (tab === "employees") {
-    return "Active enrolled workers and left / revoked history.";
+    return "Active enrolled workers and inactive / revoked history.";
   }
   return "Compare the capture against offline HR, then approve or reject.";
 }
@@ -241,20 +243,8 @@ export function App() {
         icon: sidebarIcons.admins,
       });
     }
-    if (showAuditTab) {
-      items.push({
-        id: "audit",
-        label: "Audit Log",
-        icon: sidebarIcons.audit,
-      });
-    }
-    if (showAuthLogTab) {
-      items.push({
-        id: "authLog",
-        label: "Auth Log",
-        icon: sidebarIcons.authLog,
-      });
-    }
+    // Audit Log is a single sidebar control with Enrollment / Auth chooser —
+    // do not push separate "audit" / "authLog" top-level items here.
     if (showPlantsTab) {
       items.push({
         id: "plants",
@@ -263,14 +253,28 @@ export function App() {
       });
     }
     return items;
-  }, [
-    showAdminsTab,
-    showAuditTab,
-    showAuthLogTab,
-    showEmployeesTab,
-    showGrantTab,
-    showPlantsTab,
-  ]);
+  }, [showAdminsTab, showEmployeesTab, showGrantTab, showPlantsTab]);
+
+  const auditMenuOptions = useMemo(() => {
+    const options: AuditMenuOption[] = [];
+    if (showAuditTab) {
+      options.push({
+        id: "audit",
+        label: "Enrollment Audit",
+        description: "Approvals, rejects, grants, plants",
+        icon: sidebarIcons.audit,
+      });
+    }
+    if (showAuthLogTab) {
+      options.push({
+        id: "authLog",
+        label: "Auth Audit",
+        description: "Kiosk login success & failure",
+        icon: sidebarIcons.authLog,
+      });
+    }
+    return options;
+  }, [showAuditTab, showAuthLogTab]);
 
   const handleNavigate = (tab: DashboardTab) => {
     setActiveTab(tab);
@@ -312,6 +316,7 @@ export function App() {
       <div className="mx-auto flex min-h-screen max-w-[1600px] gap-4 p-3 lg:gap-5 lg:p-4">
         <DashboardSidebar
           items={navItems}
+          auditMenuOptions={auditMenuOptions}
           activeTab={activeTab}
           employeeId={session.employeeId}
           roleLabel={session.role.replace("_", " ")}
@@ -366,64 +371,80 @@ export function App() {
                   />
                 ) : null}
                 {activeTab === "review" ? (
-                  <button
+                  <LoadingButton
                     type="button"
+                    loading={queue.loading}
+                    loadingLabel="Refreshing…"
+                    spinnerTone="dark"
+                    disabled={queue.decisionBusy}
                     onClick={() => void queue.refresh()}
-                    disabled={queue.loading || queue.decisionBusy}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
                   >
                     Refresh
-                  </button>
+                  </LoadingButton>
                 ) : null}
                 {activeTab === "plants" ? (
-                  <button
+                  <LoadingButton
                     type="button"
+                    loading={catalog.loading}
+                    loadingLabel="Refreshing…"
+                    spinnerTone="dark"
+                    disabled={catalog.busy}
                     onClick={() => void catalog.refresh()}
-                    disabled={catalog.loading || catalog.busy}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
                   >
                     Refresh
-                  </button>
+                  </LoadingButton>
                 ) : null}
                 {activeTab === "admins" ? (
-                  <button
+                  <LoadingButton
                     type="button"
+                    loading={plantAdmins.loading}
+                    loadingLabel="Refreshing…"
+                    spinnerTone="dark"
+                    disabled={plantAdmins.busy}
                     onClick={() => void plantAdmins.refresh()}
-                    disabled={plantAdmins.loading || plantAdmins.busy}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
                   >
                     Refresh
-                  </button>
+                  </LoadingButton>
                 ) : null}
                 {activeTab === "audit" ? (
-                  <button
+                  <LoadingButton
                     type="button"
+                    loading={audit.loading}
+                    loadingLabel="Refreshing…"
+                    spinnerTone="dark"
                     onClick={() => void audit.refresh()}
-                    disabled={audit.loading}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
                   >
                     Refresh
-                  </button>
+                  </LoadingButton>
                 ) : null}
                 {activeTab === "authLog" ? (
-                  <button
+                  <LoadingButton
                     type="button"
+                    loading={authLog.loading || authLog.summaryLoading}
+                    loadingLabel="Refreshing…"
+                    spinnerTone="dark"
                     onClick={() => void authLog.refresh()}
-                    disabled={authLog.loading || authLog.summaryLoading}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
                   >
                     Refresh
-                  </button>
+                  </LoadingButton>
                 ) : null}
                 {activeTab === "employees" ? (
-                  <button
+                  <LoadingButton
                     type="button"
+                    loading={plantEmployees.loading}
+                    loadingLabel="Refreshing…"
+                    spinnerTone="dark"
+                    disabled={plantEmployees.busy}
                     onClick={() => void plantEmployees.refresh()}
-                    disabled={plantEmployees.loading || plantEmployees.busy}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
                   >
                     Refresh
-                  </button>
+                  </LoadingButton>
                 ) : null}
               </div>
             </div>
@@ -481,6 +502,8 @@ export function App() {
                       imageUrl={queue.imageUrl}
                       imageLoading={queue.imageLoading}
                       busy={queue.decisionBusy}
+                      approving={queue.approving}
+                      rejecting={queue.rejecting}
                       reviewerEmployeeId={session.employeeId}
                       onApprove={queue.approve}
                       onReject={queue.reject}

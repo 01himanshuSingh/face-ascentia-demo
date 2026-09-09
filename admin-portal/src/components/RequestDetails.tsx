@@ -1,10 +1,15 @@
 import { formatCapturedAt, type RegistrationQueueItem } from "../api/adminApi";
+import { LoadingButton } from "./ui/LoadingButton";
 
 export type RequestDetailsProps = {
   item: RegistrationQueueItem | null;
   imageUrl: string | null;
   imageLoading: boolean;
   busy: boolean;
+  /** True while POST approve is in flight. */
+  approving?: boolean;
+  /** True while POST reject is in flight. */
+  rejecting?: boolean;
   /** Signed-in admin Employee ID — used in auto decision notes. */
   reviewerEmployeeId: string;
   onApprove: (reason?: string) => Promise<void>;
@@ -33,6 +38,8 @@ export function RequestDetails({
   imageUrl,
   imageLoading,
   busy,
+  approving = false,
+  rejecting = false,
   reviewerEmployeeId,
   onApprove,
   onReject,
@@ -146,22 +153,25 @@ export function RequestDetails({
       </dl>
 
       <div className="mt-auto flex flex-wrap gap-3 pt-6">
-        <button
-          type="button"
-          disabled={busy}
+        <LoadingButton
+          loading={approving}
+          loadingLabel="Approving…"
+          disabled={busy && !approving}
           onClick={handleApprove}
-          className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:min-w-[8.5rem]"
+          className="min-h-11 flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:flex-none sm:min-w-[8.5rem]"
         >
           Approve
-        </button>
-        <button
-          type="button"
-          disabled={busy}
+        </LoadingButton>
+        <LoadingButton
+          loading={rejecting}
+          loadingLabel="Rejecting…"
+          spinnerTone="danger"
+          disabled={busy && !rejecting}
           onClick={handleReject}
-          className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white/80 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:min-w-[8.5rem]"
+          className="min-h-11 flex-1 rounded-xl border border-red-200 bg-white/80 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 sm:flex-none sm:min-w-[8.5rem]"
         >
           Reject
-        </button>
+        </LoadingButton>
       </div>
     </div>
   );
