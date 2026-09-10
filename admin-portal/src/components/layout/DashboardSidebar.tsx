@@ -10,6 +10,8 @@ import { createPortal } from "react-dom";
 
 import { BrandLogo } from "../BrandLogo";
 
+const SIDEBAR_COLLAPSED_KEY = "faceAuth.adminSidebarCollapsed";
+
 export type DashboardTab =
   | "review"
   | "grant"
@@ -162,6 +164,43 @@ function IconBuilding({ className }: { className?: string }) {
   );
 }
 
+function IconPanelLeft({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="16"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path d="M9 4v16" stroke="currentColor" strokeWidth="1.75" />
+    </svg>
+  );
+}
+
+function IconLogout({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 17l5-5-5-5M21 12H9"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export const sidebarIcons = {
   review: <IconClipboard />,
   grant: <IconUserPlus />,
@@ -176,9 +215,26 @@ function isAuditSectionTab(tab: DashboardTab): boolean {
   return tab === "audit" || tab === "authLog";
 }
 
+function readCollapsedPreference(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsedPreference(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 type AuditLogNavProps = {
   options: AuditMenuOption[];
   activeTab: DashboardTab;
+  collapsed: boolean;
   onNavigate: (tab: DashboardTab) => void;
   onCloseMobile: () => void;
 };
@@ -187,10 +243,12 @@ type AuditLogNavProps = {
  * Single Audit Log control:
  * - Desktop: click → flyout to the RIGHT via portal (above dashboard UI)
  * - Mobile: click → accordion dropdown inside the sidebar
+ * - Collapsed desktop: icon-only trigger; flyout still opens to the right
  */
 function AuditLogNav({
   options,
   activeTab,
+  collapsed,
   onNavigate,
   onCloseMobile,
 }: AuditLogNavProps) {
@@ -254,7 +312,6 @@ function AuditLogNav({
     };
   }, [open]);
 
-  // Mobile accordion stays open while on either audit screen.
   useEffect(() => {
     if (
       parentActive &&
@@ -327,9 +384,12 @@ function AuditLogNav({
         aria-expanded={open}
         aria-controls={panelId}
         aria-haspopup="menu"
+        aria-label="Audit Log"
+        title={collapsed ? "Audit Log" : undefined}
         onClick={() => setOpen((value) => !value)}
         className={clsx(
-          "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
+          "flex w-full items-center rounded-xl text-left text-sm font-medium transition",
+          collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
           parentActive || open
             ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
             : "text-text-muted hover:bg-white/60 hover:text-text",
@@ -343,28 +403,31 @@ function AuditLogNav({
         >
           {sidebarIcons.audit}
         </span>
-        <span className="min-w-0 flex-1 truncate">Audit Log</span>
-        <span
-          className={clsx(
-            "shrink-0 text-current transition-transform duration-200 lg:rotate-0",
-            open && "max-lg:rotate-90",
-          )}
-          aria-hidden
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M9 6l6 6-6 6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </span>
+        {!collapsed ? (
+          <>
+            <span className="min-w-0 flex-1 truncate">Audit Log</span>
+            <span
+              className={clsx(
+                "shrink-0 text-current transition-transform duration-200 lg:rotate-0",
+                open && "max-lg:rotate-90",
+              )}
+              aria-hidden
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M9 6l6 6-6 6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          </>
+        ) : null}
       </button>
 
-      {/* Mobile: accordion inside sidebar */}
-      {open ? (
+      {open && !collapsed ? (
         <div
           id={panelId}
           className="mt-1 overflow-hidden rounded-xl border border-border/70 bg-white/95 lg:hidden"
@@ -408,6 +471,48 @@ function AuditLogNav({
   );
 }
 
+function NavButton({
+  label,
+  icon,
+  active,
+  collapsed,
+  onClick,
+}: {
+  label: string;
+  icon: ReactNode;
+  active: boolean;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      className={clsx(
+        "flex w-full items-center rounded-xl text-left text-sm font-medium transition",
+        collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
+        active
+          ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
+          : "text-text-muted hover:bg-white/60 hover:text-text",
+      )}
+    >
+      <span
+        className={clsx("shrink-0", active ? "text-primary" : "text-text-muted")}
+      >
+        {icon}
+      </span>
+      {!collapsed ? <span className="min-w-0 truncate">{label}</span> : null}
+    </button>
+  );
+}
+
+/**
+ * Desktop: collapsible icon rail (persist preference).
+ * Mobile: full drawer (unchanged).
+ */
 export function DashboardSidebar({
   items,
   auditMenuOptions = [],
@@ -423,6 +528,31 @@ export function DashboardSidebar({
   const showAuditMenu = auditMenuOptions.length > 0;
   const mainItems = items.filter((item) => item.id !== "plants");
   const plantItem = items.find((item) => item.id === "plants");
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    setDesktopCollapsed(readCollapsedPreference());
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setIsDesktop(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const toggleDesktopCollapsed = () => {
+    setDesktopCollapsed((prev) => {
+      const next = !prev;
+      writeCollapsedPreference(next);
+      return next;
+    });
+  };
+
+  // Icon rail only on desktop; mobile drawer always shows full labels.
+  const collapsed = desktopCollapsed && isDesktop;
 
   return (
     <>
@@ -437,101 +567,159 @@ export function DashboardSidebar({
 
       <aside
         className={clsx(
-          "fixed inset-y-3 left-3 z-50 flex w-[15.5rem] flex-col rounded-[1.5rem] glass-panel transition-transform duration-300 lg:sticky lg:top-4 lg:z-auto lg:h-[calc(100vh-2rem)] lg:translate-x-0",
+          "fixed inset-y-3 left-3 z-50 flex flex-col rounded-[1.5rem] glass-panel transition-[width,transform] duration-300 ease-out lg:sticky lg:top-4 lg:z-auto lg:h-[calc(100vh-2rem)] lg:shrink-0 lg:translate-x-0",
+          // Mobile always full width drawer
+          "w-[15.5rem]",
+          // Desktop collapse → icon rail
+          collapsed ? "lg:w-[4.75rem]" : "lg:w-[15.5rem]",
           mobileOpen ? "translate-x-0" : "-translate-x-[120%] lg:translate-x-0",
         )}
+        data-collapsed={collapsed ? "true" : "false"}
       >
-        <div className="border-b border-white/50 px-4 py-4">
-          <BrandLogo size="md" align="start" />
-          <p className="mt-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">
-            Admin Portal
-          </p>
+        <div
+          className={clsx(
+            "border-b border-white/50",
+            collapsed ? "px-2 py-3 lg:px-2" : "px-4 py-4",
+          )}
+        >
+          <div
+            className={clsx(
+              "flex gap-2",
+              collapsed
+                ? "flex-col items-center lg:items-center"
+                : "items-start justify-between",
+            )}
+          >
+            <div className="min-w-0 w-full max-lg:block">
+              {/* Mobile drawer — always full brand */}
+              <div className="lg:hidden">
+                <BrandLogo size="md" align="start" />
+                <p className="mt-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">
+                  Admin Portal
+                </p>
+              </div>
+
+              {/* Desktop expanded */}
+              {!collapsed ? (
+                <div className="hidden lg:block">
+                  <BrandLogo size="md" align="start" />
+                  <p className="mt-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">
+                    Admin Portal
+                  </p>
+                </div>
+              ) : (
+                <div className="hidden lg:flex lg:justify-center">
+                  <img
+                    src="/brand/vardhman-logo.png"
+                    alt="Vardhmān"
+                    className="h-8 w-auto object-contain 2xl:h-10"
+                  />
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleDesktopCollapsed}
+              className={clsx(
+                "hidden shrink-0 place-items-center rounded-lg border border-border/80 bg-white/70 text-text transition hover:bg-white lg:grid",
+                "h-9 w-9",
+              )}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <span
+                className={clsx(
+                  "transition-transform duration-300",
+                  collapsed && "rotate-180",
+                )}
+              >
+                <IconPanelLeft />
+              </span>
+            </button>
+          </div>
         </div>
 
         <nav
-          className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4"
+          className={clsx(
+            "flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden py-4",
+            collapsed ? "px-2" : "px-3",
+          )}
           aria-label="Admin sections"
         >
-          {mainItems.map((item) => {
-            const active = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  onNavigate(item.id);
-                  onCloseMobile();
-                }}
-                className={clsx(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
-                  active
-                    ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
-                    : "text-text-muted hover:bg-white/60 hover:text-text",
-                )}
-              >
-                <span
-                  className={clsx(
-                    "shrink-0",
-                    active ? "text-primary" : "text-text-muted",
-                  )}
-                >
-                  {item.icon}
-                </span>
-                {item.label}
-              </button>
-            );
-          })}
+          {mainItems.map((item) => (
+            <NavButton
+              key={item.id}
+              label={item.label}
+              icon={item.icon}
+              active={activeTab === item.id}
+              collapsed={collapsed}
+              onClick={() => {
+                onNavigate(item.id);
+                onCloseMobile();
+              }}
+            />
+          ))}
 
           {showAuditMenu ? (
             <AuditLogNav
               options={auditMenuOptions}
               activeTab={activeTab}
+              collapsed={collapsed}
               onNavigate={onNavigate}
               onCloseMobile={onCloseMobile}
             />
           ) : null}
 
           {plantItem ? (
-            <button
-              type="button"
+            <NavButton
+              label={plantItem.label}
+              icon={plantItem.icon}
+              active={activeTab === plantItem.id}
+              collapsed={collapsed}
               onClick={() => {
                 onNavigate(plantItem.id);
                 onCloseMobile();
               }}
-              className={clsx(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
-                activeTab === plantItem.id
-                  ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
-                  : "text-text-muted hover:bg-white/60 hover:text-text",
-              )}
-            >
-              <span
-                className={clsx(
-                  "shrink-0",
-                  activeTab === plantItem.id
-                    ? "text-primary"
-                    : "text-text-muted",
-                )}
-              >
-                {plantItem.icon}
-              </span>
-              {plantItem.label}
-            </button>
+            />
           ) : null}
         </nav>
 
-        <div className="border-t border-white/50 px-4 py-4">
-          <div className="rounded-xl bg-white/50 px-3 py-3">
-            <p className="truncate text-sm font-semibold text-text">{employeeId}</p>
-            <p className="mt-0.5 truncate text-xs text-text-muted">{roleLabel}</p>
-            <p className="mt-1 truncate text-xs text-text-muted">{plantLabel}</p>
-          </div>
+        <div
+          className={clsx(
+            "border-t border-white/50",
+            collapsed ? "px-2 py-3" : "px-4 py-4",
+          )}
+        >
+          {!collapsed ? (
+            <div className="rounded-xl bg-white/50 px-3 py-3">
+              <p className="truncate text-sm font-semibold text-text">
+                {employeeId}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-text-muted">{roleLabel}</p>
+              <p className="mt-1 truncate text-xs text-text-muted">{plantLabel}</p>
+            </div>
+          ) : (
+            <div
+              className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-sm font-bold text-primary"
+              title={`${employeeId} · ${roleLabel}`}
+            >
+              {employeeId.slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <button
             type="button"
             onClick={onSignOut}
-            className="mt-3 w-full rounded-xl border border-border/80 bg-white/70 px-3 py-2 text-sm font-medium text-text transition hover:bg-white"
+            title={collapsed ? "Sign out" : undefined}
+            aria-label="Sign out"
+            className={clsx(
+              "mt-3 w-full rounded-xl border border-border/80 bg-white/70 text-sm font-medium text-text transition hover:bg-white",
+              collapsed
+                ? "grid h-10 place-items-center px-0"
+                : "px-3 py-2",
+            )}
           >
-            Sign out
+            {collapsed ? <IconLogout /> : "Sign out"}
           </button>
         </div>
       </aside>

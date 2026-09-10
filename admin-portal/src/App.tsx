@@ -313,7 +313,7 @@ export function App() {
 
   return (
     <div className="dashboard-ambient min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] gap-4 p-3 lg:gap-5 lg:p-4">
+      <div className="mx-auto flex min-h-screen max-w-[1600px] gap-4 p-3 lg:gap-5 lg:p-4 2xl:mx-0 2xl:max-w-none 2xl:w-full 2xl:gap-5 2xl:py-4 2xl:pl-3 2xl:pr-5">
         <DashboardSidebar
           items={navItems}
           auditMenuOptions={auditMenuOptions}

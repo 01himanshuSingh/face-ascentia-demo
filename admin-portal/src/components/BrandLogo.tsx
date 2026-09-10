@@ -15,9 +15,9 @@ export type BrandLogoProps = {
 };
 
 const sizeClass = {
-  sm: "h-9 w-auto",
-  md: "h-12 w-auto",
-  lg: "h-[4.5rem] w-auto sm:h-[5.25rem]",
+  sm: "h-9 w-auto 2xl:h-11",
+  md: "h-12 w-auto xl:h-14 2xl:h-16",
+  lg: "h-[4.5rem] w-auto sm:h-[5.25rem] 2xl:h-[6.25rem]",
 } as const;
 
 /**
