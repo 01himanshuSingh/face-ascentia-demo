@@ -4,7 +4,7 @@
 
 This repository is a production-oriented Face Authentication System for Android kiosks running a Mendix web application in Chrome.
 
-The final backend is deployed on the client's Debian server in Docker and uses the client's PostgreSQL + pgvector database. The Mendix team receives the Face Authentication SDK as a React/TypeScript npm package and does not receive the backend source code.
+The final backend is deployed on the client's Debian server in Docker and uses the client's PostgreSQL + pgvector database. The Mendix team receives the Face Authentication SDK as a React/TypeScript npm package (UAT: `.tgz` + `docs/handover/mendix-sdk-tgz-handover.md`) and does not receive the backend source code.
 
 ## Architecture
 
@@ -98,10 +98,12 @@ The Mendix team does not receive the backend source code.
 11. Backend returns the decision.
 12. SDK returns the result to Mendix.
 
-If the employee is not face-enrolled (or not in the system yet), the SDK opens **Register UI** (Path A):
+If the employee is not face-enrolled (or not in the system yet), the SDK opens a **choice overlay**, then **Register UI** (Path A) or Path B:
 
-- **[Employee Register] (Path A — registration-first hybrid)** — SDK overlay: **Plant + Employee ID + Full name**. SDK **reuses the JPEG from authenticate** → `POST /register` (PENDING). **No pre-existing HR row required** — employee + enrollment created only when plant admin **approves** in Admin Portal (HR compares against offline backup).
+- **[Employee Register] (Path A — registration-first hybrid)** — SDK overlay: **Plant + Employee ID** (no separate Full name field; display name = Employee ID). SDK **reuses the JPEG from authenticate** → `POST /register` (PENDING). **No pre-existing HR row required** — employee + enrollment created only when plant admin **approves** in Admin Portal (HR compares against offline backup).
 - **[Admin Login] (Path B)** — Admin enters ID + password at kiosk, then **fresh face capture + Employee ID per employee** → `POST /kiosk/admin-enroll` (ACTIVE immediately). **Built 2026-09-01** — see SDK STATE 4–5 and `AGENTS.md`.
+
+**Mendix integration contract (UAT):** one primary call — `authenticateOrRegister(employeeId)` — owns camera, liveness, Path A/B overlays, and backend HTTPS. Mendix supplies Employee ID + mount node, handles the outcome, then `destroy()`. See `docs/handover/mendix-sdk-tgz-handover.md`.
 
 See `docs/architecture/registration-flow.md` and `AGENTS.md`.
 
@@ -662,7 +664,9 @@ Workers are **not** pre-seeded — enroll via test harness Path A (register → 
 | SUPER plant workspace lens | **Done** — client `sessionStorage` (`faceAuth.adminWorkspacePlantId`); not stored in server admin session |
 | Plant-admin roster + ungrant | **Done (2026-09-04)** — SUPER only; soft `is_active=false` |
 | Auto-ungrant on employee leave | Service ready (`auto_ungrant_for_employee`); **no employee-update API caller yet** |
-| Mendix npm package publish | Build + `npm pack` ready; Mendix integration **pending** |
+| Mendix npm package publish | **Done for UAT handover (2026-09-10)** — `.tgz` `0.1.4` + handover doc; Mendix app wiring **their side** |
+| Auth Log (kiosk LOGIN attempts) | **Done (2026-09-10)** — see section below |
+| Admin Portal sidebar / Audit UX | **Done (2026-09-10)** — single Audit Log control + Auth Audit |
 
 ## Work completed 2026-09-02 — Admin grant RBAC, portal M6–M8, employee-derived plant
 
@@ -720,11 +724,11 @@ Plant admins can grant `PLANT_ADMIN` within their own plant. Admin Portal grant 
 ### Next steps (after 2026-09-02)
 
 1. ~~Update `AGENTS.md` grant policy + M6–M8 status~~ → superseded by 2026-09-03/04 sections below
-2. Mendix SDK `.tgz` handoff + integration
+2. ~~Mendix SDK `.tgz` handoff~~ → **done 2026-09-10**
 3. SDK capture profiles for Android kiosk
 4. Production: rate limit login/auth (~20 attempts / employee / 5 min recommended), deploy runbook, optional Redis sessions
 5. Backend pytest for grant + revoke + plant catalog + kiosk admin routes
-6. Future: dynamic RBAC UI (edit `admin_role_permissions`), audit read API
+6. Future: dynamic RBAC UI (edit `admin_role_permissions`)
 7. Wire `auto_ungrant_for_employee` when employee INACTIVE / plant-transfer API exists
 
 ## Work completed 2026-09-03 — Plant catalog + SUPER workspace lens
@@ -807,12 +811,96 @@ Closes the grant lifecycle for v1: SUPER can **list** and **ungrant** `PLANT_ADM
 
 ### Next steps (after 2026-09-04)
 
-1. Mendix SDK `.tgz` handoff + integration
+1. ~~Mendix SDK `.tgz` handoff~~ → **done 2026-09-10** (Mendix still wires into their app)
 2. SDK capture profiles for Android kiosk
 3. Production hardening: per-employee auth rate limit, deploy runbook, optional Redis sessions
-4. Backend pytest: grant, revoke, plant catalog, Path B kiosk admin
+4. Backend pytest: grant, revoke, plant catalog, Path B kiosk admin, auth log
 5. Employee lifecycle API → call `auto_ungrant_for_employee` on INACTIVE / plant leave
-6. Future: dynamic RBAC UI, audit read API, optional URL workspace slug (still client lens)
+6. Future: dynamic RBAC UI, optional URL workspace slug (still client lens)
+7. Redeploy Render (or customer host) so live API includes Auth Log routes + writers
+
+## Work completed 2026-09-10 — Auth Log, portal Audit UX, kiosk name policy, Mendix `.tgz` handover
+
+Closes UAT packaging for Mendix and adds a dedicated **Auth Log** (kiosk LOGIN attempts) separate from enrollment/compliance Audit. Kiosk no longer collects Full name. SDK pack version **0.1.4**.
+
+### Policy — kiosk display name
+
+| Rule | Decision |
+|------|----------|
+| Path A Register overlay | **Plant + Employee ID only** — no Full name field |
+| Path B admin enroll | Employee ID only for identity fields |
+| `full_name` / `submitted_full_name` | Set to **Employee ID** client-side (DB column still filled) |
+| Admin Portal review / grant UI | Prefer Employee ID; avoid duplicate name displays |
+
+### Backend — Auth Log
+
+Dedicated read APIs over existing `audit_log` **LOGIN** rows (text-only; optional match score %). Not mixed into a generic “all audit” UI.
+
+| Area | Change | Status |
+|------|--------|--------|
+| Enums | `AUTH_LOG_VIEW`; `AuthLogResult` / `AuthLogReasonCode`; metadata keys | Done |
+| Writer | `authentication.py` writes LOGIN success/fail (+ score when plant known); skips unknown-employee (no `plant_id`) | Done |
+| Schema / repo / service | `schemas/auth_log.py`, `repositories/auth_log_repository.py`, `services/auth_log.py` | Done |
+| Routes | `GET /admin/auth-log`, `GET /admin/auth-log/summary` (`admin_auth_log.py`) | Done |
+| Migration `20260909_0014` | Seed/backfill `AUTH_LOG_VIEW` on admin roles | Done (apply via `alembic upgrade head`) |
+
+**Ops note:** Admins must **re-login** after the permission migration so `AUTH_LOG_VIEW` appears in session. Portal pointed at Render will 404 Auth Log until that host is redeployed with this code (or use local API).
+
+### Admin Portal — Auth Audit + sidebar
+
+| Area | Files / behavior | Status |
+|------|------------------|--------|
+| API + hooks | `adminApi.ts`, `queryKeys.ts`, `useAuthLog.ts` | Done |
+| UI | `admin-portal/src/components/authLog/*` | Done |
+| Nav | Single **Audit Log** control → Enrollment Audit / Auth Audit | Done |
+| Desktop | Right-side flyout via portal (high z-index; avoids sidebar transform stacking) | Done |
+| Mobile | In-sidebar accordion | Done |
+| Collapsible rail | Icon rail; preference `localStorage` key `faceAuth.adminSidebarCollapsed` | Done |
+| Wide layout | `App.tsx` shell `2xl:mx-0 2xl:max-w-none`; brand logo size bumps | Done |
+
+### SDK — pack `0.1.4` + camera stage
+
+| Area | Change | Status |
+|------|--------|--------|
+| Version | `@ascentia/face-auth-sdk` **0.1.4** | Done |
+| Artifact | `ascentia-face-auth-sdk-0.1.4.tgz` (`npm pack`; `files`: `dist` + README) | Done |
+| Camera stage | Portrait **3/4**, responsive height via `dvh` (`CameraOverlay.tsx`) | Done |
+| Test harness | Depends on `file:./vendor/ascentia-face-auth-sdk-0.1.4.tgz` | Done |
+| Public Mendix API | Prefer `createFaceAuthSDK` → `authenticateOrRegister` → `destroy` | Confirmed |
+
+**IP / delivery:** Hand Mendix the **`.tgz`**, not an Ascentia-built `.mpk`. Mendix may wrap the SDK in their own pluggable widget / `.mpk`. Package does not include `sdk/src`; browser JS remains inspectable. Prefer future packs **without** shipping `.map` if stronger closed-source posture is required.
+
+### Mendix handover documentation
+
+| Doc | Purpose | Status |
+|-----|---------|--------|
+| `docs/handover/mendix-sdk-tgz-handover.md` | How Ascentia delivers `.tgz`; Mendix install (`file:./vendor/…`); `apiBaseUrl`; one-call integration; upgrade path; CORS | Done |
+
+**UAT backend URL (current):** `https://face-auth-ascentia.onrender.com` (passed as `apiBaseUrl` by Mendix).
+
+### Alembic head (after this phase)
+
+`20260909_0014` (Auth Log permission seed/backfill)
+
+### Manual test checklist (Auth Log + portal)
+
+```text
+1. alembic upgrade head (0014)
+2. Restart local uvicorn with current backend code
+3. Point admin-portal .env at local API (or redeploy Render)
+4. Re-login SUPER/PLANT_ADMIN → Audit Log → Auth Audit visible
+5. Run kiosk authenticate success + fail → rows appear (known employee / plant)
+6. Unknown Employee ID alone does not create LOGIN auth-log row (no plant_id)
+```
+
+### Next steps (after 2026-09-10)
+
+1. Mendix installs `0.1.4` `.tgz` and wires `authenticateOrRegister` in their React/widget code
+2. Redeploy live API (Render / customer host) for Auth Log + latest writers
+3. Optional: repack SDK without source maps for closed handover
+4. SDK capture profiles for Android kiosk
+5. Production hardening: auth rate limit, deploy runbook, pytest coverage
+6. Wire `auto_ungrant_for_employee` when employee leave API exists
 
 ## Technology Stack
 
@@ -867,13 +955,19 @@ Closes the grant lifecycle for v1: SUPER can **list** and **ungrant** `PLANT_ADM
 
 ## Client Handoff Boundary
 
-Mendix team receives:
+Mendix team receives (UAT / testing phase):
 
 ```text
-Face Auth SDK npm package
+ascentia-face-auth-sdk-<version>.tgz   (npm pack — dist/ only)
 +
-SDK integration contract
+docs/handover/mendix-sdk-tgz-handover.md
++
+apiBaseUrl for the shared/test backend
 ```
+
+**Delivery choice:** ship **`.tgz`**, not an Ascentia-built Mendix `.mpk`. Mendix owns widget/`.mpk` packaging on their Studio Pro toolchain. Primary call: `authenticateOrRegister(employeeId)`.
+
+Later phases may move the same package to a private npm registry without changing call sites.
 
 Client IT hosts:
 
@@ -885,7 +979,7 @@ Debian Server
     +-- PostgreSQL + pgvector
 ```
 
-The Mendix team should not need the backend implementation details.
+The Mendix team should not need the backend implementation details. Admin Portal remains Ascentia/client IT — not part of the Mendix SDK package.
 
 ## Source of Truth
 
