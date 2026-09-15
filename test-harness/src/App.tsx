@@ -214,7 +214,7 @@ export function App() {
         <p style={styles.status}>{status}</p>
 
         <section style={styles.integrationBox}>
-          <p style={styles.integrationTitle}>Mendix wiring (reference)</p>
+          <p style={styles.integrationTitle}>Mendix wiring with custom API base URL (reference)</p>
           <pre style={styles.integrationCode}>{`import { createFaceAuthSDK } from "@ascentia/face-auth-sdk";
 
 const sdk = createFaceAuthSDK({
