@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository is a production-oriented Face Authentication System for Android kiosks running a Mendix web application in Chrome.
+This repository is a production-oriented Face Authentication System for Android kiosks running a Mendix web application in Chrome.s
 
 The final backend is deployed on the client's Debian server in Docker and uses the client's PostgreSQL + pgvector database. The Mendix team receives the Face Authentication SDK as a React/TypeScript npm package (UAT: `.tgz` + `docs/handover/mendix-sdk-tgz-handover.md`) and does not receive the backend source code.
 
