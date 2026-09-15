@@ -590,8 +590,8 @@ export function DashboardSidebar({
                 : "items-start justify-between",
             )}
           >
-            <div className="min-w-0 w-full max-lg:block">
-              {/* Mobile drawer — always full brand */}
+            <div className="min-w-0 flex-1">
+              {/* Mobile drawer — full wordmark, width-capped */}
               <div className="lg:hidden">
                 <BrandLogo size="md" align="start" />
                 <p className="mt-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">
@@ -599,9 +599,9 @@ export function DashboardSidebar({
                 </p>
               </div>
 
-              {/* Desktop expanded */}
+              {/* Desktop expanded wordmark / collapsed chain mark */}
               {!collapsed ? (
-                <div className="hidden lg:block">
+                <div className="hidden min-w-0 lg:block">
                   <BrandLogo size="md" align="start" />
                   <p className="mt-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">
                     Admin Portal
@@ -609,11 +609,7 @@ export function DashboardSidebar({
                 </div>
               ) : (
                 <div className="hidden lg:flex lg:justify-center">
-                  <img
-                    src="/brand/vardhman-logo.png"
-                    alt="Vardhmān"
-                    className="h-8 w-auto object-contain 2xl:h-10"
-                  />
+                  <BrandLogo size="sm" variant="mark" />
                 </div>
               )}
             </div>

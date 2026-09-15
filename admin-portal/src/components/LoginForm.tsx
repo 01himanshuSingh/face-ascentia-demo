@@ -20,9 +20,9 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-5 py-12 sm:px-6">
-      <div className="w-full max-w-[22rem]">
-        <header className="mb-10">
+    <div className="flex min-h-screen items-center justify-center bg-white px-4 py-10 sm:px-6 sm:py-12">
+      <div className="w-full max-w-[20rem] sm:max-w-[24rem]">
+        <header className="mb-8 w-full sm:mb-10">
           <BrandLogo size="lg" productLabel="Admin Portal" />
         </header>
 

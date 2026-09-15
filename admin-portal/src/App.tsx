@@ -42,6 +42,7 @@ import {
   type DashboardTab,
   type SidebarNavItem,
 } from "./components/layout/DashboardSidebar";
+import { BrandLogo } from "./components/BrandLogo";
 import { LoginForm } from "./components/LoginForm";
 import { PlantWorkspaceSelector } from "./components/PlantWorkspaceSelector";
 import { PlantCatalogPanel } from "./components/plants/PlantCatalogPanel";
@@ -346,11 +347,9 @@ export function App() {
                     />
                   </svg>
                 </button>
-                <img
-                  src="/brand/vardhman-logo.png"
-                  alt="Vardhmān"
-                  className="mt-0.5 hidden h-9 w-auto object-contain sm:block lg:hidden"
-                />
+                <div className="mt-0.5 shrink-0 lg:hidden">
+                  <BrandLogo size="sm" variant="mark" />
+                </div>
                 <div className="min-w-0">
                   <h1 className="text-xl font-semibold tracking-tight text-text sm:text-2xl">
                     {tabTitle(activeTab)}
