@@ -20,7 +20,7 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-4 py-10 sm:px-6 sm:py-12">
+    <div className="login-screen flex min-h-screen items-center justify-center bg-white px-4 py-10 sm:px-6 sm:py-12">
       <div className="w-full max-w-[20rem] sm:max-w-[24rem]">
         <header className="mb-8 w-full sm:mb-10">
           <BrandLogo size="lg" productLabel="Admin Portal" />
@@ -29,7 +29,7 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
         {notice ? (
           <p
             role="status"
-            className="mb-6 rounded-lg border border-secondary/40 bg-[#fff8e6] px-3 py-2.5 text-center text-sm text-[#7a5c00]"
+            className="mb-6 rounded-lg border border-primary/25 bg-brand-50 px-3 py-2.5 text-center text-sm text-secondary"
           >
             {notice}
           </p>
@@ -82,7 +82,7 @@ export function LoginForm({ busy, error, notice, onSubmit }: LoginFormProps) {
             type="submit"
             loading={busy}
             loadingLabel="Signing in…"
-            className="mt-1 h-11 w-full rounded-lg bg-primary text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+            className="mt-1 h-11 w-full rounded-lg bg-primary text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
             Sign in
           </LoadingButton>

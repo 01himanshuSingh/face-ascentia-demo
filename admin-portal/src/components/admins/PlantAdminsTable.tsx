@@ -17,7 +17,7 @@ export type PlantAdminsTableProps = {
 
 function SkeletonRows() {
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-white p-4">
+    <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
       {Array.from({ length: 5 }).map((_, index) => (
         <div
           key={index}
@@ -48,7 +48,7 @@ export function PlantAdminsTable({
 
   if (!loading && total === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         No active plant admins for this workspace. Grant a worker from the
         Grant admin tab, or clear the search.
       </div>
@@ -69,7 +69,7 @@ export function PlantAdminsTable({
             type="button"
             disabled={page <= 1 || loading}
             onClick={() => onPageChange(page - 1)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
@@ -80,7 +80,7 @@ export function PlantAdminsTable({
             type="button"
             disabled={page >= totalPages || loading}
             onClick={() => onPageChange(page + 1)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>
@@ -90,7 +90,7 @@ export function PlantAdminsTable({
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border border-border bg-white shadow-sm transition ${
+      className={`overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition ${
         loading ? "opacity-70" : "opacity-100"
       }`}
     >
@@ -165,7 +165,7 @@ export function PlantAdminsTable({
                     spinnerTone="danger"
                     disabled={loading}
                     onClick={() => onRevoke(admin)}
-                    className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                    className="rounded-lg border border-red-500/40 bg-surface px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-950/40"
                   >
                     Ungrant
                   </LoadingButton>

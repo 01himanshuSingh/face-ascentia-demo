@@ -48,7 +48,7 @@ export function DecisionDialog({
         <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-text">
           {isApprove ? "Note (optional)" : "Reason"}
           <textarea
-            className="min-h-24 resize-y rounded-xl border border-border/80 bg-white/70 px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+            className="min-h-24 resize-y rounded-xl border border-border/80 bg-surface px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
@@ -56,14 +56,14 @@ export function DecisionDialog({
           />
         </label>
 
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
 
         <div className="mt-5 flex justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-sm font-medium text-text transition hover:bg-white disabled:opacity-60"
+            className="rounded-xl border border-border/80 bg-surface px-4 py-2 text-sm font-medium text-text transition hover:bg-secondary disabled:opacity-60"
           >
             Cancel
           </button>

@@ -83,7 +83,7 @@ export function PlantCatalogPanel({
 
       {statusMessage ? (
         <p
-          className="rounded-lg border border-primary/30 bg-brand-50 px-4 py-3 text-sm text-brand-800"
+          className="rounded-lg border border-primary/30 bg-primary/15 px-4 py-3 text-sm text-primary"
           role="status"
         >
           {statusMessage}
@@ -92,7 +92,7 @@ export function PlantCatalogPanel({
 
       {error ? (
         <p
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          className="rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-400"
           role="alert"
         >
           {error}

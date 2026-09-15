@@ -27,7 +27,7 @@ export function RevokeAdminDialog({
     <div className="fixed inset-0 z-50 grid place-items-center bg-text/50 p-4 backdrop-blur-[2px]">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-2xl"
       >
         <h3 className="text-lg font-semibold text-text">Ungrant plant admin</h3>
         <p className="mt-2 text-sm leading-relaxed text-text-muted">
@@ -53,7 +53,7 @@ export function RevokeAdminDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
+            className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
           >
             Cancel
           </button>

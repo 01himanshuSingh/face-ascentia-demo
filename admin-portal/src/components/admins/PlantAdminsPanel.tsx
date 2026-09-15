@@ -41,7 +41,7 @@ export function PlantAdminsPanel({
 
   if (needsPlant) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         Select a plant workspace (header toggle) to list and ungrant plant
         admins for that plant.
       </div>
@@ -72,7 +72,7 @@ export function PlantAdminsPanel({
       <label className="flex max-w-md flex-col gap-1.5 text-sm font-medium text-text">
         Search
         <input
-          className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          className="rounded-lg border border-border bg-surface px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           value={searchInput}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Employee ID"

@@ -78,7 +78,7 @@ export function PlantFormDialog({
       aria-modal="true"
       aria-labelledby="plant-form-title"
     >
-      <div className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-xl shadow-text/10">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl shadow-text/10">
         <h2
           id="plant-form-title"
           className="text-lg font-semibold tracking-tight text-text"
@@ -94,7 +94,7 @@ export function PlantFormDialog({
           <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
             Plant code
             <input
-              className="rounded-lg border border-border bg-white px-3 py-2.5 font-mono text-base uppercase text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+              className="rounded-lg border border-border bg-surface px-3 py-2.5 font-mono text-base uppercase text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
               value={plantCode}
               onChange={(event) => setPlantCode(event.target.value)}
               placeholder="e.g. DEV02"
@@ -107,7 +107,7 @@ export function PlantFormDialog({
           <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
             Plant name
             <input
-              className="rounded-lg border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
+              className="rounded-lg border border-border bg-surface px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-background"
               value={plantName}
               onChange={(event) => setPlantName(event.target.value)}
               placeholder="e.g. Development Plant 2"
@@ -123,7 +123,7 @@ export function PlantFormDialog({
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
+              className="rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text transition hover:bg-background disabled:opacity-60"
             >
               Cancel
             </button>

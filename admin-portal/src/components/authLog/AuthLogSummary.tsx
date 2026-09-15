@@ -15,7 +15,7 @@ function Kpi({
   hint?: string | null;
 }) {
   return (
-    <div className="rounded-[1.2rem] border border-border/70 bg-white/80 px-4 py-3.5">
+    <div className="rounded-[1.2rem] border border-border/70 bg-surface px-4 py-3.5">
       <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
         {label}
       </p>

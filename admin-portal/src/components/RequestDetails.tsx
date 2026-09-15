@@ -112,7 +112,7 @@ export function RequestDetails({
         <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
           Face capture
         </p>
-        <div className="grid min-h-56 place-items-center overflow-hidden rounded-[1.25rem] border border-white/60 bg-white/50 shadow-inner">
+        <div className="grid min-h-56 place-items-center overflow-hidden rounded-[1.25rem] border border-border bg-background shadow-inner">
           {imageLoading ? (
             <div className="h-56 w-full skeleton-shimmer" aria-busy="true">
               <p className="sr-only">Loading photo…</p>
@@ -130,13 +130,13 @@ export function RequestDetails({
       </div>
 
       <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl bg-white/50 px-3.5 py-3">
+        <div className="rounded-2xl bg-secondary px-3.5 py-3">
           <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
             Employee ID
           </dt>
           <dd className="mt-1 text-sm font-semibold text-text">{item.employeeId}</dd>
         </div>
-        <div className="rounded-2xl bg-white/50 px-3.5 py-3">
+        <div className="rounded-2xl bg-secondary px-3.5 py-3">
           <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
             Plant
           </dt>
@@ -144,7 +144,7 @@ export function RequestDetails({
             {item.plantCode ?? item.plantName ?? item.plantId}
           </dd>
         </div>
-        <div className="rounded-2xl bg-white/50 px-3.5 py-3 sm:col-span-2">
+        <div className="rounded-2xl bg-secondary px-3.5 py-3 sm:col-span-2">
           <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
             Submitted
           </dt>
@@ -168,7 +168,7 @@ export function RequestDetails({
           spinnerTone="danger"
           disabled={busy && !rejecting}
           onClick={handleReject}
-          className="min-h-11 flex-1 rounded-xl border border-red-200 bg-white/80 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 sm:flex-none sm:min-w-[8.5rem]"
+          className="min-h-11 flex-1 rounded-xl border border-red-500/40 bg-surface px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-950/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 sm:flex-none sm:min-w-[8.5rem]"
         >
           Reject
         </LoadingButton>

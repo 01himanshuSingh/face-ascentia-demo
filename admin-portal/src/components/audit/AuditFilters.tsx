@@ -70,7 +70,7 @@ export function AuditFilters({
             aria-expanded={open}
             aria-controls={panelId}
             onClick={() => setOpen((value) => !value)}
-            className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-white px-3.5 py-3 text-left text-sm font-medium text-text shadow-sm transition active:bg-background"
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-3 text-left text-sm font-medium text-text shadow-sm transition active:bg-background"
           >
             <span className="min-w-0 truncate">{selected.label}</span>
             <span
@@ -89,7 +89,7 @@ export function AuditFilters({
               id={panelId}
               role="listbox"
               aria-label="Audit categories"
-              className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-border bg-white shadow-lg"
+              className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
             >
               <ul className="max-h-[min(22rem,70dvh)] overflow-y-auto overscroll-contain py-1">
                 {CATEGORIES.map((item) => {
@@ -107,7 +107,7 @@ export function AuditFilters({
                         className={clsx(
                           "flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left text-sm transition active:bg-background",
                           isSelected
-                            ? "bg-brand-50 font-semibold text-brand-800"
+                            ? "bg-primary/15 font-semibold text-primary"
                             : "font-medium text-text",
                         )}
                       >
@@ -143,7 +143,7 @@ export function AuditFilters({
                 className={clsx(
                   "rounded-md px-3 py-1.5 text-sm font-medium transition",
                   isSelected
-                    ? "bg-white text-text shadow-sm"
+                    ? "bg-surface text-text shadow-sm"
                     : "text-text-muted hover:text-text",
                 )}
               >
@@ -157,7 +157,7 @@ export function AuditFilters({
       <label className="flex w-full min-w-0 flex-col gap-1.5 text-sm font-medium text-text md:min-w-[14rem] md:flex-1">
         Search
         <input
-          className="rounded-xl border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
+          className="rounded-xl border border-border bg-surface px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
           value={searchInput}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Actor or employee ID"

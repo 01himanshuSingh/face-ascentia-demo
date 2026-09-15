@@ -334,7 +334,7 @@ export function App() {
               <div className="flex min-w-0 items-start gap-3">
                 <button
                   type="button"
-                  className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border/80 bg-white/70 text-text lg:hidden"
+                  className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border/80 bg-surface text-text lg:hidden"
                   aria-label="Open navigation"
                   onClick={() => setMobileNavOpen(true)}
                 >
@@ -377,7 +377,7 @@ export function App() {
                     spinnerTone="dark"
                     disabled={queue.decisionBusy}
                     onClick={() => void queue.refresh()}
-                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
+                    className="h-10 rounded-xl border border-border/80 bg-surface px-3.5 text-sm font-medium text-text hover:bg-secondary"
                   >
                     Refresh
                   </LoadingButton>
@@ -390,7 +390,7 @@ export function App() {
                     spinnerTone="dark"
                     disabled={catalog.busy}
                     onClick={() => void catalog.refresh()}
-                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
+                    className="h-10 rounded-xl border border-border/80 bg-surface px-3.5 text-sm font-medium text-text hover:bg-secondary"
                   >
                     Refresh
                   </LoadingButton>
@@ -403,7 +403,7 @@ export function App() {
                     spinnerTone="dark"
                     disabled={plantAdmins.busy}
                     onClick={() => void plantAdmins.refresh()}
-                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
+                    className="h-10 rounded-xl border border-border/80 bg-surface px-3.5 text-sm font-medium text-text hover:bg-secondary"
                   >
                     Refresh
                   </LoadingButton>
@@ -415,7 +415,7 @@ export function App() {
                     loadingLabel="Refreshing…"
                     spinnerTone="dark"
                     onClick={() => void audit.refresh()}
-                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
+                    className="h-10 rounded-xl border border-border/80 bg-surface px-3.5 text-sm font-medium text-text hover:bg-secondary"
                   >
                     Refresh
                   </LoadingButton>
@@ -427,7 +427,7 @@ export function App() {
                     loadingLabel="Refreshing…"
                     spinnerTone="dark"
                     onClick={() => void authLog.refresh()}
-                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
+                    className="h-10 rounded-xl border border-border/80 bg-surface px-3.5 text-sm font-medium text-text hover:bg-secondary"
                   >
                     Refresh
                   </LoadingButton>
@@ -440,7 +440,7 @@ export function App() {
                     spinnerTone="dark"
                     disabled={plantEmployees.busy}
                     onClick={() => void plantEmployees.refresh()}
-                    className="h-10 rounded-xl border border-border/80 bg-white/80 px-3.5 text-sm font-medium text-text hover:bg-white"
+                    className="h-10 rounded-xl border border-border/80 bg-surface px-3.5 text-sm font-medium text-text hover:bg-secondary"
                   >
                     Refresh
                   </LoadingButton>

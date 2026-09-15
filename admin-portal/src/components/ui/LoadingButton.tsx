@@ -20,7 +20,7 @@ export function ButtonSpinner({
         "inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2",
         tone === "light" && "border-white/35 border-t-white",
         tone === "dark" && "border-primary/25 border-t-primary",
-        tone === "danger" && "border-red-200 border-t-red-700",
+        tone === "danger" && "border-red-500/40 border-t-red-700",
         className,
       )}
       aria-hidden

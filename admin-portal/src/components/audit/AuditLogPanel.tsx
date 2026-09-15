@@ -44,7 +44,7 @@ export function AuditLogPanel({
 
   if (needsPlant) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         Select a plant workspace (header toggle) to view the audit timeline for
         that plant.
       </div>

@@ -82,7 +82,7 @@ export function GrantAdminForm({
 
       {statusMessage ? (
         <p
-          className="mt-4 rounded-xl border border-primary/30 bg-brand-50 px-4 py-3 text-sm text-brand-800"
+          className="mt-4 rounded-xl border border-primary/30 bg-primary/15 px-4 py-3 text-sm text-primary"
           role="status"
         >
           {statusMessage}
@@ -91,7 +91,7 @@ export function GrantAdminForm({
 
       {errorMessage ? (
         <p
-          className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          className="mt-4 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-400"
           role="alert"
         >
           {errorMessage}
@@ -102,7 +102,7 @@ export function GrantAdminForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
           Employee ID
           <input
-            className="h-11 rounded-xl border border-border/80 bg-white px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
+            className="h-11 rounded-xl border border-border/80 bg-surface px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
             value={employeeId}
             onChange={(event) => handleEmployeeChange(event.target.value)}
             onBlur={handleEmployeeBlur}
@@ -124,7 +124,7 @@ export function GrantAdminForm({
         ) : null}
 
         {previewError ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-400">
             {previewError}
           </p>
         ) : null}
@@ -136,7 +136,7 @@ export function GrantAdminForm({
               Plant: {preview.plantName} ({preview.plantCode})
             </p>
             {!preview.grantEligible ? (
-              <p className="mt-2 text-amber-800">
+              <p className="mt-2 text-sm text-primary">
                 Already an active admin
                 {preview.existingAdminRole
                   ? ` (${preview.existingAdminRole.replace("_", " ")})`
@@ -150,7 +150,7 @@ export function GrantAdminForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
           Portal password
           <input
-            className="h-11 rounded-xl border border-border/80 bg-white px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
+            className="h-11 rounded-xl border border-border/80 bg-surface px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -163,7 +163,7 @@ export function GrantAdminForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium text-text">
           Confirm password
           <input
-            className="h-11 rounded-xl border border-border/80 bg-white px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
+            className="h-11 rounded-xl border border-border/80 bg-surface px-3.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-background disabled:opacity-60"
             type="password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
@@ -172,7 +172,7 @@ export function GrantAdminForm({
             required
           />
           {confirmPassword && password !== confirmPassword ? (
-            <span className="text-xs font-normal text-red-600">
+            <span className="text-xs font-normal text-red-400">
               Passwords do not match.
             </span>
           ) : null}

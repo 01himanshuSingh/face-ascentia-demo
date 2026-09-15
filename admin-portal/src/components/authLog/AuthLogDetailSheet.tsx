@@ -84,7 +84,7 @@ export function AuthLogDetailSheet({ item, onClose }: AuthLogDetailSheetProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative z-10 flex max-h-[min(88dvh,40rem)] w-full max-w-lg flex-col rounded-t-2xl border border-border bg-white shadow-xl transition duration-200 md:rounded-2xl ${
+        className={`relative z-10 flex max-h-[min(88dvh,40rem)] w-full max-w-lg flex-col rounded-t-2xl border border-border bg-surface shadow-xl transition duration-200 md:rounded-2xl ${
           entered
             ? "translate-y-0 opacity-100"
             : "translate-y-6 opacity-0 md:translate-y-2"
@@ -105,7 +105,7 @@ export function AuthLogDetailSheet({ item, onClose }: AuthLogDetailSheetProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-text transition hover:bg-background"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text transition hover:bg-background"
           >
             Close
           </button>

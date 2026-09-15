@@ -340,10 +340,10 @@ function AuditLogNav({
             style={{ top: flyoutPos.top, left: flyoutPos.left }}
           >
             <span
-              className="absolute top-1/2 -left-1.5 z-0 h-3 w-3 -translate-y-1/2 rotate-45 bg-[#0B2F1C]"
+              className="absolute top-1/2 -left-1.5 z-0 h-3 w-3 -translate-y-1/2 rotate-45 bg-secondary"
               aria-hidden
             />
-            <div className="relative z-10 min-w-[12.75rem] max-w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-[#0B2F1C] py-1.5 shadow-[0_16px_48px_rgba(15,23,42,0.35)] ring-1 ring-white/10">
+            <div className="relative z-10 min-w-[12.75rem] max-w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-secondary py-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.45)] ring-1 ring-primary/20">
               <ul className="flex flex-col">
                 {options.map((option) => {
                   const selected = activeTab === option.id;
@@ -361,7 +361,7 @@ function AuditLogNav({
                         )}
                       >
                         <span
-                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#A8C5B6]"
+                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
                           aria-hidden
                         />
                         {option.label}
@@ -391,8 +391,8 @@ function AuditLogNav({
           "flex w-full items-center rounded-xl text-left text-sm font-medium transition",
           collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
           parentActive || open
-            ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
-            : "text-text-muted hover:bg-white/60 hover:text-text",
+            ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,174,239,0.28)]"
+            : "text-text-muted hover:bg-white/5 hover:text-text",
         )}
       >
         <span
@@ -430,7 +430,7 @@ function AuditLogNav({
       {open && !collapsed ? (
         <div
           id={panelId}
-          className="mt-1 overflow-hidden rounded-xl border border-border/70 bg-white/95 lg:hidden"
+          className="mt-1 overflow-hidden rounded-xl border border-border/70 bg-surface lg:hidden"
           role="menu"
           aria-label="Audit log types"
         >
@@ -495,8 +495,8 @@ function NavButton({
         "flex w-full items-center rounded-xl text-left text-sm font-medium transition",
         collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
         active
-          ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,132,61,0.15)]"
-          : "text-text-muted hover:bg-white/60 hover:text-text",
+          ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(0,174,239,0.28)]"
+          : "text-text-muted hover:bg-white/5 hover:text-text",
       )}
     >
       <span
@@ -578,7 +578,7 @@ export function DashboardSidebar({
       >
         <div
           className={clsx(
-            "border-b border-white/50",
+            "border-b border-border/80",
             collapsed ? "px-2 py-3 lg:px-2" : "px-4 py-4",
           )}
         >
@@ -618,7 +618,7 @@ export function DashboardSidebar({
               type="button"
               onClick={toggleDesktopCollapsed}
               className={clsx(
-                "hidden shrink-0 place-items-center rounded-lg border border-border/80 bg-white/70 text-text transition hover:bg-white lg:grid",
+                "hidden shrink-0 place-items-center rounded-lg border border-border/80 bg-surface text-text transition hover:bg-secondary lg:grid",
                 "h-9 w-9",
               )}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -683,12 +683,12 @@ export function DashboardSidebar({
 
         <div
           className={clsx(
-            "border-t border-white/50",
+            "border-t border-border/80",
             collapsed ? "px-2 py-3" : "px-4 py-4",
           )}
         >
           {!collapsed ? (
-            <div className="rounded-xl bg-white/50 px-3 py-3">
+            <div className="rounded-xl bg-secondary/80 px-3 py-3">
               <p className="truncate text-sm font-semibold text-text">
                 {employeeId}
               </p>
@@ -709,7 +709,7 @@ export function DashboardSidebar({
             title={collapsed ? "Sign out" : undefined}
             aria-label="Sign out"
             className={clsx(
-              "mt-3 w-full rounded-xl border border-border/80 bg-white/70 text-sm font-medium text-text transition hover:bg-white",
+              "mt-3 w-full rounded-xl border border-border/80 bg-surface text-sm font-medium text-text transition hover:bg-secondary",
               collapsed
                 ? "grid h-10 place-items-center px-0"
                 : "px-3 py-2",

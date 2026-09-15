@@ -89,7 +89,7 @@ function PaginationBar({
           type="button"
           disabled={page <= 1 || loading}
           onClick={() => onPageChange(page - 1)}
-          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
         >
           Previous
         </button>
@@ -100,7 +100,7 @@ function PaginationBar({
           type="button"
           disabled={page >= totalPages || loading}
           onClick={() => onPageChange(page + 1)}
-          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
         >
           Next
         </button>
@@ -121,7 +121,7 @@ export function AuditLogTable({
 }: AuditLogTableProps) {
   if (loading && items.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-white px-6 py-12 text-center text-sm text-text-muted">
+      <div className="rounded-xl border border-border bg-surface px-6 py-12 text-center text-sm text-text-muted">
         Loading audit events…
       </div>
     );
@@ -129,7 +129,7 @@ export function AuditLogTable({
 
   if (!loading && total === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         No audit events in this plant for the selected filters (default last 7
         days).
       </div>
@@ -137,7 +137,7 @@ export function AuditLogTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
       {/* Mobile card list */}
       <ul className="divide-y divide-border md:hidden">
         {items.map((item) => (

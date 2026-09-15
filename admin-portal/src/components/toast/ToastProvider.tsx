@@ -36,12 +36,12 @@ const DEFAULT_DURATION_MS = 5200;
 
 function toneStyles(tone: ToastTone): string {
   if (tone === "success") {
-    return "border-brand-100 bg-brand-50 text-brand-800";
+    return "border-primary/30 bg-primary/15 text-primary";
   }
   if (tone === "info") {
-    return "border-secondary/40 bg-[#fff8e6] text-[#7a5c00]";
+    return "border-primary/25 bg-secondary text-text";
   }
-  return "border-red-200 bg-red-50 text-red-800";
+  return "border-red-500/40 bg-red-950/40 text-red-300";
 }
 
 function toneLabel(tone: ToastTone): string {

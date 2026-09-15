@@ -35,7 +35,7 @@ export function PlantCatalogTable({
 }: PlantCatalogTableProps) {
   if (loading && plants.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm text-text-muted">
         Loading plant catalog…
       </div>
     );
@@ -43,7 +43,7 @@ export function PlantCatalogTable({
 
   if (!loading && total === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         No plants yet. Create the first plant to open a workspace for
         registration review and plant admins.
       </div>
@@ -54,7 +54,7 @@ export function PlantCatalogTable({
   const rangeEnd = Math.min(page * pageSize, total);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
@@ -81,7 +81,7 @@ export function PlantCatalogTable({
                     className={clsx(
                       "inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
                       plant.isActive
-                        ? "bg-brand-50 text-brand-800"
+                        ? "bg-primary/15 text-primary"
                         : "bg-background text-text-muted",
                     )}
                   >
@@ -97,7 +97,7 @@ export function PlantCatalogTable({
                       type="button"
                       disabled={busy}
                       onClick={() => onEdit(plant)}
-                      className="rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:opacity-60"
+                      className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:opacity-60"
                     >
                       Edit
                     </button>
@@ -111,8 +111,8 @@ export function PlantCatalogTable({
                         className={clsx(
                           "rounded-lg border px-2.5 py-1.5 text-xs font-medium",
                           plant.isActive
-                            ? "border-red-200 bg-white text-red-700 hover:bg-red-50"
-                            : "border-brand-100 bg-white text-brand-800 hover:bg-brand-50",
+                            ? "border-red-500/40 bg-surface text-red-400 hover:bg-red-950/40"
+                            : "border-primary/30 bg-surface text-primary hover:bg-primary/15",
                         )}
                       >
                         {plant.isActive ? "Deactivate" : "Reactivate"}
@@ -136,7 +136,7 @@ export function PlantCatalogTable({
               type="button"
               disabled={page <= 1 || loading}
               onClick={() => onPageChange(page - 1)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
@@ -147,7 +147,7 @@ export function PlantCatalogTable({
               type="button"
               disabled={page >= totalPages || loading}
               onClick={() => onPageChange(page + 1)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>

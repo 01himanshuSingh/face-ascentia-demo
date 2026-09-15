@@ -37,7 +37,7 @@ export function EmployeesTable({
 
   if (loading && employees.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-white px-6 py-12 text-center text-sm text-text-muted">
+      <div className="rounded-xl border border-border bg-surface px-6 py-12 text-center text-sm text-text-muted">
         Loading employees…
       </div>
     );
@@ -45,7 +45,7 @@ export function EmployeesTable({
 
   if (!loading && total === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         {isLeft
           ? "No inactive workers in this plant yet. Revoke an active employee to see them here."
           : "No active enrolled workers in this plant. Approve a registration or enroll via kiosk first."}
@@ -67,7 +67,7 @@ export function EmployeesTable({
             type="button"
             disabled={page <= 1 || loading}
             onClick={() => onPageChange(page - 1)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
@@ -78,7 +78,7 @@ export function EmployeesTable({
             type="button"
             disabled={page >= totalPages || loading}
             onClick={() => onPageChange(page + 1)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>
@@ -87,7 +87,7 @@ export function EmployeesTable({
     ) : null;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
       {/* Mobile compact list — tap opens bottom sheet */}
       <ul className="divide-y divide-border md:hidden">
         {employees.map((employee) => (
@@ -175,7 +175,7 @@ export function EmployeesTable({
                         loadingLabel="…"
                         spinnerTone="danger"
                         onClick={() => onRevoke(employee)}
-                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                        className="rounded-lg border border-red-500/40 bg-surface px-3 py-1.5 text-sm font-medium text-red-400 hover:bg-red-950/40"
                       >
                         Revoke
                       </LoadingButton>

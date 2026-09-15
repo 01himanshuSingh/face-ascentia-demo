@@ -205,7 +205,7 @@ export function AuditEventDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative z-10 flex max-h-[88dvh] w-full flex-col rounded-t-[1.35rem] border border-border border-b-0 bg-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
+        className={`relative z-10 flex max-h-[88dvh] w-full flex-col rounded-t-[1.35rem] border border-border border-b-0 bg-surface shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           entered ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -247,7 +247,7 @@ export function AuditEventDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${titleId}-desktop`}
-        className={`relative z-10 hidden w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-2xl transition duration-200 md:block ${
+        className={`relative z-10 hidden w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl transition duration-200 md:block ${
           entered ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
@@ -267,7 +267,7 @@ export function AuditEventDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-text transition hover:bg-background"
+            className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-text transition hover:bg-background"
           >
             Close
           </button>

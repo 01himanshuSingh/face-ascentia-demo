@@ -32,7 +32,7 @@ export function RequestTable({
   if (needsPlant) {
     return (
       <div className="flex min-h-[22rem] flex-col items-center justify-center rounded-[1.35rem] glass-panel px-6 py-12 text-center">
-        <div className="mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-secondary/15 text-secondary">
+        <div className="mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path
               d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18M2 22h20"
@@ -100,7 +100,7 @@ export function RequestTable({
 
   return (
     <div className="overflow-hidden rounded-[1.35rem] glass-panel">
-      <div className="flex items-center justify-between gap-3 border-b border-white/50 px-5 py-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border/80 px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold text-text">Pending registrations</h2>
           {workspaceLabel ? (
@@ -112,7 +112,7 @@ export function RequestTable({
             <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
             Pending review
           </span>
-          <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-text">
+          <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-semibold text-text">
             {total}
           </span>
         </div>
@@ -130,7 +130,7 @@ export function RequestTable({
                   "w-full rounded-2xl border px-4 py-3 text-left transition duration-200",
                   selected
                     ? "border-primary/20 bg-primary/[0.07] shadow-sm"
-                    : "border-transparent bg-white/45 hover:border-border/60 hover:bg-white/80",
+                    : "border-transparent bg-surface/45 hover:border-border/60 hover:bg-surface",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -164,7 +164,7 @@ export function RequestTable({
       </ul>
 
       {onPageChange && total > pageSize ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/50 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/80 px-4 py-3">
           <p className="text-xs text-text-muted">
             Showing {rangeStart}–{rangeEnd} of {total}
           </p>
@@ -173,7 +173,7 @@ export function RequestTable({
               type="button"
               disabled={page <= 1 || loading}
               onClick={() => onPageChange(page - 1)}
-              className="rounded-lg border border-border/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-text transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border/80 bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
@@ -184,7 +184,7 @@ export function RequestTable({
               type="button"
               disabled={page >= totalPages || loading}
               onClick={() => onPageChange(page + 1)}
-              className="rounded-lg border border-border/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-text transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-border/80 bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>

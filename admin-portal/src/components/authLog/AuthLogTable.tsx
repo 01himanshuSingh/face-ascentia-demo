@@ -21,7 +21,7 @@ function ResultBadge({ result }: { result: AuthLogItem["result"] }) {
         "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold",
         success
           ? "bg-primary/10 text-primary"
-          : "bg-red-50 text-red-700",
+          : "bg-red-950/40 text-red-400",
       )}
     >
       {success ? "Success" : "Failed"}
@@ -70,7 +70,7 @@ function PaginationBar({
           type="button"
           disabled={page <= 1 || loading}
           onClick={() => onPageChange(page - 1)}
-          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
         >
           Previous
         </button>
@@ -81,7 +81,7 @@ function PaginationBar({
           type="button"
           disabled={page >= totalPages || loading}
           onClick={() => onPageChange(page + 1)}
-          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
         >
           Next
         </button>
@@ -105,7 +105,7 @@ export function AuthLogTable({
 }: AuthLogTableProps) {
   if (loading && items.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-white px-6 py-12 text-center text-sm text-text-muted">
+      <div className="rounded-xl border border-border bg-surface px-6 py-12 text-center text-sm text-text-muted">
         Loading authentication attempts…
       </div>
     );
@@ -113,7 +113,7 @@ export function AuthLogTable({
 
   if (!loading && total === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center text-sm leading-relaxed text-text-muted">
         No authentication attempts for this plant with the selected filters
         (default: today UTC).
       </div>
@@ -121,7 +121,7 @@ export function AuthLogTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <ul className="divide-y divide-border md:hidden">
         {items.map((item) => (
           <li key={item.logId}>

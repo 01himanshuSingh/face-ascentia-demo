@@ -3,22 +3,21 @@
 @theme {
   --font-sans: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
-  /* Brand tokens */
-  --color-primary: #00843d;
-  --color-secondary: #f5a400;
-  --color-background: #f4f6f4;
-  --color-text: #1f2937;
-  --color-border: #d9ded9;
-  --color-text-muted: #6b7280;
+  /* Ascentia Labs dashboard palette */
+  --color-primary: #00aeef;
+  --color-secondary: #0b1f33;
+  --color-background: #050b14;
+  --color-surface: #0d1624;
+  --color-text: #ffffff;
+  --color-text-muted: #a7b0be;
+  --color-border: #1e2d42;
 
-  /* Tailwind aliases used across admin portal */
-  --color-brand-50: #e6f4ec;
-  --color-brand-100: #cce9d9;
-  --color-brand-600: #00843d;
-  --color-brand-700: #006b31;
-  --color-brand-800: #005427;
-  --color-surface: #f7f8f6;
-  --color-ink: #1f2937;
+  --color-brand-50: #e6f7fd;
+  --color-brand-100: #c5eefb;
+  --color-brand-600: #00aeef;
+  --color-brand-700: #0096cc;
+  --color-brand-800: #0078a3;
+  --color-ink: #ffffff;
 }
 
 @layer base {
@@ -33,36 +32,52 @@
   }
 }
 
+/*
+ * Login stays a white page. Tokens below restore readable navy text / light
+ * fields without changing the dashboard palette.
+ */
+@layer components {
+  .login-screen {
+    color-scheme: light;
+    --color-text: #0b1f33;
+    --color-text-muted: #5c6778;
+    --color-border: #d5dbe3;
+    --color-background: #f4f7fb;
+    --color-surface: #ffffff;
+  }
+}
+
 @layer utilities {
   .glass-panel {
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: rgba(13, 22, 36, 0.92);
+    border: 1px solid rgba(0, 174, 239, 0.12);
     box-shadow:
-      0 1px 2px rgba(31, 41, 55, 0.04),
-      0 18px 40px rgba(31, 41, 55, 0.06);
+      0 1px 2px rgba(0, 0, 0, 0.28),
+      0 18px 44px rgba(0, 0, 0, 0.38);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
   }
 
   .glass-panel-soft {
-    background: rgba(255, 255, 255, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.65);
-    box-shadow: 0 10px 28px rgba(31, 41, 55, 0.05);
+    background: rgba(11, 31, 51, 0.72);
+    border: 1px solid rgba(167, 176, 190, 0.12);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
   }
 
   .dashboard-ambient {
-    background-color: #f4f6f4;
+    color-scheme: dark;
+    background-color: #050b14;
     background-image:
       radial-gradient(
         ellipse 70% 50% at 8% 0%,
-        rgba(0, 132, 61, 0.07),
+        rgba(0, 174, 239, 0.14),
         transparent 55%
       ),
       radial-gradient(
         ellipse 55% 45% at 100% 100%,
-        rgba(245, 164, 0, 0.06),
+        rgba(11, 31, 51, 0.9),
         transparent 50%
       );
   }
@@ -70,9 +85,9 @@
   .skeleton-shimmer {
     background: linear-gradient(
       90deg,
-      rgba(217, 222, 217, 0.35) 0%,
-      rgba(255, 255, 255, 0.75) 50%,
-      rgba(217, 222, 217, 0.35) 100%
+      rgba(13, 22, 36, 0.9) 0%,
+      rgba(30, 45, 66, 0.95) 50%,
+      rgba(13, 22, 36, 0.9) 100%
     );
     background-size: 200% 100%;
     animation: shimmer 1.4s ease-in-out infinite;
@@ -86,5 +101,4 @@
       background-position: -100% 0;
     }
   }
-
 }

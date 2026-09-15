@@ -110,7 +110,7 @@ export function AuthLogFilters({
                 className={clsx(
                   "rounded-md px-3 py-1.5 text-sm font-medium transition",
                   isSelected
-                    ? "bg-white text-text shadow-sm"
+                    ? "bg-surface text-text shadow-sm"
                     : "text-text-muted hover:text-text",
                 )}
               >
@@ -125,7 +125,7 @@ export function AuthLogFilters({
         <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-text">
           Reason
           <select
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
+            className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
             value={reasonCode}
             onChange={(event) => onReasonCodeChange(event.target.value)}
           >
@@ -140,7 +140,7 @@ export function AuthLogFilters({
         <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-text">
           Employee ID
           <input
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg md:text-sm"
+            className="rounded-xl border border-border bg-surface px-3 py-2.5 text-base text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg md:text-sm"
             value={searchInput}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Employee ID"
@@ -153,7 +153,7 @@ export function AuthLogFilters({
           From (UTC)
           <input
             type="date"
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
+            className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
             value={toDateInputValue(from)}
             onChange={(event) => onFromChange(fromDateInput(event.target.value))}
           />
@@ -163,7 +163,7 @@ export function AuthLogFilters({
           To (UTC)
           <input
             type="date"
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
+            className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:rounded-lg"
             value={exclusiveIsoToDateInput(to)}
             onChange={(event) =>
               onToChange(toDateInputExclusive(event.target.value))

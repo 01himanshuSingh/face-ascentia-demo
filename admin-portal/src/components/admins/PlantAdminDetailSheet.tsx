@@ -72,7 +72,7 @@ export function PlantAdminDetailSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative z-10 flex max-h-[88dvh] w-full flex-col rounded-t-[1.35rem] border border-border border-b-0 bg-white shadow-2xl transition-transform duration-300 ease-out ${
+        className={`relative z-10 flex max-h-[88dvh] w-full flex-col rounded-t-[1.35rem] border border-border border-b-0 bg-surface shadow-2xl transition-transform duration-300 ease-out ${
           entered ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -125,7 +125,7 @@ export function PlantAdminDetailSheet({
               loadingLabel="Opening…"
               spinnerTone="danger"
               onClick={() => onUngrant(admin)}
-              className="min-h-11 w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"
+              className="min-h-11 w-full rounded-xl border border-red-500/40 bg-surface px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-950/40"
             >
               Ungrant plant admin
             </LoadingButton>
